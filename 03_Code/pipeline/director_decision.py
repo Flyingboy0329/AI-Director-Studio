@@ -1,129 +1,79 @@
-﻿import os
-import sys
-import json
-import cv2
+﻿import json
+import os
 from pathlib import Path
 
-CURRENT_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = CURRENT_DIR.parent.parent
-OUTPUT_DIR = PROJECT_ROOT / "05_Output"
-LUA_TASK_OUT = OUTPUT_DIR / "test_marker_task.lua"
-
-def score_to_rpg_tier(score):
-    # 嚴格遵循非直覺對調規則：傳說掛藍球 🔵，精良掛黃球 🟡
-    if score >= 90:
-        return "Yellow", "【傳說 🔵】"
-    elif score >= 80:
-        return "Purple", "【史詩 🟣】"
-    elif score >= 70:
-        return "Blue", "【精良 🟡】"
-    elif score >= 55:
-        return "Green", "【優秀 🟢】"
+def score_to_rpg_tier(final_score):
+    if final_score >= 90:
+        return "Yellow", "[LEGENDARY]"
+    elif final_score >= 80:
+        return "Purple", "[EPIC]"
+    elif final_score >= 70:
+        return "Blue", "[RARE]"
+    elif final_score >= 55:
+        return "Green", "[UNCOMMON]"
     else:
-        return "Cream", "【普通 ⚪】"
+        return "Cream", "[COMMON]"
 
-def clean_comment_text(comments):
-    parts = []
-    for c in comments:
-        for sub in c.replace("，", "/").replace("、", "/").split("/"):
-            s = sub.strip()
-            if s and s not in parts:
-                parts.append(s)
-    short_summary = "/".join(parts[:2])
-    return short_summary if short_summary else "品質平穩"
+def build_markers(video_path, vision_analysis_path=None, audio_analysis_path=None, fps=30.0):
+    proj_root = Path(__file__).resolve().parent.parent.parent
+    
+    # 讀取視覺特徵
+    vision_frames = []
+    if vision_analysis_path and os.path.exists(vision_analysis_path):
+        with open(vision_analysis_path, "r", encoding="utf-8") as f:
+            v_data = json.load(f)
+            vision_frames = v_data.get("frames", [])
 
-def build_continuous_segments(raw_items, total_frames, fps):
-    if not raw_items:
-        return [{
-            "start_frame": 0,
-            "duration_frames": total_frames,
-            "color": "Blue",
-            "name": "V_Default",
-            "note": "[AI-V] 評分 70 【精良 🟡】 | 常規素材"
-        }]
+    # 讀取音訊特徵 (真正融合 Whisper 語音特徵)
+    audio_segments = []
+    if audio_analysis_path and os.path.exists(audio_analysis_path):
+        with open(audio_analysis_path, "r", encoding="utf-8") as f:
+            a_data = json.load(f)
+            audio_segments = a_data.get("segments", [])
 
-    clusters = []
-    current = {
-        "start_frame": 0,
-        "score": raw_items[0]["score"],
-        "comments": [raw_items[0]["comment"]]
-    }
-
-    for item in raw_items[1:]:
-        color_curr, _ = score_to_rpg_tier(current["score"])
-        color_next, _ = score_to_rpg_tier(item["score"])
-        
-        if color_curr != color_next:
-            current["end_frame"] = item["start_frame"]
-            clusters.append(current)
-            current = {
-                "start_frame": item["start_frame"],
-                "score": item["score"],
-                "comments": [item["comment"]]
-            }
-        else:
-            current["comments"].append(item["comment"])
-
-    current["end_frame"] = total_frames
-    clusters.append(current)
-
+    # 雙軌加權矩陣運算 (視覺 60% + 音訊 40%)
     markers = []
-    for c in clusters:
-        start_f = c["start_frame"]
-        dur_f = max(1, c["end_frame"] - start_f)
-        color, tier_tag = score_to_rpg_tier(c["score"])
-        comment_str = clean_comment_text(c["comments"])
+    for vf in vision_frames:
+        time_sec = vf.get("time_sec", 0.0)
+        v_score = vf.get("clarity_score", 50.0)
         
-        note = f"[AI-V] 評分 {c['score']} {tier_tag} | {comment_str}"
+        # 尋找對應時間區間的音訊能量與信心度
+        a_score = 50.0
+        transcript_snippet = ""
+        for seg in audio_segments:
+            if seg.get("start", 0) <= time_sec <= seg.get("end", 0):
+                # 語速密度或信心度加成
+                a_score = seg.get("score", 70.0)
+                transcript_snippet = seg.get("text", "").strip()
+                break
         
+        # 雙軌融合分數
+        fused_score = (v_score * 0.6) + (a_score * 0.4)
+        color, tier_label = score_to_rpg_tier(fused_score)
+        
+        start_frame = int(time_sec * fps)
+        note = f"{tier_label} Score:{fused_score:.1f}"
+        if transcript_snippet:
+            note += f" | {transcript_snippet[:20]}"
+            
         markers.append({
-            "start_frame": start_f,
-            "duration_frames": dur_f,
+            "start_frame": start_frame,
+            "duration": 30,
             "color": color,
-            "name": f"V_{c['score']}",
             "note": note
         })
-    return markers
 
-def build_markers(video_clip_name="japan_walk", video_path=None, raw_video_file=None, vision_json=None, audio_json=None):
-    data_dir = PROJECT_ROOT / "02_Data"
+    # 輸出結構化 Lua 任務檔
+    output_lua = proj_root / "05_Output" / "test_marker_task.lua"
+    output_lua.parent.mkdir(parents=True, exist_ok=True)
     
-    if vision_json is None:
-        vision_json = data_dir / "vision_analysis.json"
-    if audio_json is None:
-        audio_json = data_dir / "audio_analysis.json"
-    if video_path is None:
-        video_path = data_dir / "video" / f"{video_clip_name}_video.mp4"
+    with open(output_lua, "w", encoding="utf-8") as f:
+        f.write("-- AI Director Marker Task (Dynamic Path Generated)\n")
+        f.write("local task = {\n")
+        f.write(f'  video_path = [==[{video_path}]==],\n')
+        f.write("  markers = {\n")
+        for m in markers[:20]: # 挑選最優片段注入
+            f.write(f'    {{ start_frame = {m["start_frame"]}, duration = {m["duration"]}, color = "{m["color"]}", note = [==[{m["note"]}]==] }},\n')
+        f.write("  }\n}\nreturn task\n")
 
-    raw_path_str = str(raw_video_file).replace("\\", "/") if raw_video_file else ""
-
-    cap = cv2.VideoCapture(str(video_path))
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 1048
-    fps = cap.get(cv2.CAP_PROP_FPS) or 29.97
-    cap.release()
-    
-    with open(vision_json, "r", encoding="utf-8") as f:
-        v_data = json.load(f)
-        
-    video_markers = build_continuous_segments(v_data, total_frames, fps)
-
-    lua_lines = [
-        "return {",
-        "    schema_version = 2,",
-        f'    task_id = "ai_director_{video_clip_name}",',
-        f'    video_clip_name = "{video_clip_name}",',
-        f'    video_file_path = "{raw_path_str}",',
-        "    video_markers = {"
-    ]
-    for m in video_markers:
-        lua_lines.append(f"        {{ start_frame = {m['start_frame']}, duration_frames = {m['duration_frames']}, color = \"{m['color']}\", name = \"{m['name']}\", note = \"{m['note']}\" }},")
-    lua_lines.append("    }")
-    lua_lines.append("}")
-
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    with open(LUA_TASK_OUT, "w", encoding="utf-8") as f:
-        f.write("\n".join(lua_lines))
-    print(f"✅ [Director] 任務檔已校準（金色傳說 🔵 / 藍色精良 🟡）: {LUA_TASK_OUT.name}")
-
-if __name__ == "__main__":
-    build_markers()
+    return str(output_lua)

@@ -1,3 +1,4 @@
-{
-  "watch_dir": "C:/Users/pan/Desktop/AI_Director/00_Agent"
+﻿{
+  "watch_dir": "02_Data",
+  "context_prompt": "FPS, gaming highlights, gameplay review"
 }
