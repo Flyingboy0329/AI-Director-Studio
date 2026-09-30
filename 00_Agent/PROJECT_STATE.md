@@ -1,0 +1,21 @@
+# AI Director Project State (專案狀態大腦)
+
+- **專案名稱**：AI 導演：影音剪輯決策輔助系統
+- **核心定位**：人機協同工作流。AI 進行素材語義解析與剪輯建議，人類掌握最終剪輯決策。
+- **硬體環境**：
+  - GPU 0: NVIDIA GeForce RTX 5060 Ti (16GB VRAM)
+  - GPU 1: NVIDIA GeForce RTX 3060 (12GB VRAM)
+- **推論核心與環境**：
+  - 推論引擎: llama-server (llama.cpp)
+  - 運行模型: Qwen3.6-35B-A3B-Uncensored (MoE Q4_K_M) + mmproj 視覺投影
+  - 工具協定: FastMCP (stdio 介面)
+- **既有 Pipeline 架構**：
+  - M0 ~ M5 核心流程已初步打通 (FFmpeg 前處理、多模態理解、Whisper 轉錄、Qwen 決策大腦)。
+- **當前階段里程碑**：
+  - 階段目標: 執行本地 Agent 資格測試 (T001)，完成 M0~M5 現有代碼與架構盤點，產出客觀審查報告。
+  - **系統核心升級 v3.0**：實裝「連續鏡頭語義聚合演算法 (AI Shot Region Semantic Aggregation)」。
+  - **最新成果 (v3.2 路徑緊急校準)**：
+    - `main.py` 重構為全自動 Pipeline Runner，支援端到端無人值守執行。
+    - 實作 `auto_apply_markers.py`：支援 DaVinci BMD Script API 自動注入標記，並具備 Windows 系統通知備援機制。
+    - 更新 Watchdog 模式 (`--watch`)：常駐監控 `02_Data/` 目錄，自動排除暫存檔並觸發素材處理流程。
+    - 系統已具備「上傳素材 -> 後台自動分析 -> 標記自動注入」之完整自動化工作流。

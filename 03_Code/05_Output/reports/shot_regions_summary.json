@@ -1,0 +1,65 @@
+[
+  {
+    "shot_idx": 1,
+    "start_tc": "01:00:00:00",
+    "end_tc": "01:00:07:00",
+    "duration_sec": 7,
+    "grade": "傳說",
+    "score": 95,
+    "reason": "核心可用"
+  },
+  {
+    "shot_idx": 2,
+    "start_tc": "01:00:07:00",
+    "end_tc": "01:00:13:00",
+    "duration_sec": 6,
+    "grade": "史詩",
+    "score": 85,
+    "reason": "氛圍完整"
+  },
+  {
+    "shot_idx": 3,
+    "start_tc": "01:00:13:00",
+    "end_tc": "01:00:20:00",
+    "duration_sec": 7,
+    "grade": "優秀",
+    "score": 45,
+    "reason": "輔助空鏡"
+  },
+  {
+    "shot_idx": 4,
+    "start_tc": "01:00:20:00",
+    "end_tc": "01:00:25:00",
+    "duration_sec": 5,
+    "grade": "精良",
+    "score": 70,
+    "reason": "畫面穩定"
+  },
+  {
+    "shot_idx": 5,
+    "start_tc": "01:00:25:00",
+    "end_tc": "01:00:30:00",
+    "duration_sec": 5,
+    "grade": "傳說",
+    "score": 95,
+    "reason": "核心可用"
+  },
+  {
+    "shot_idx": 6,
+    "start_tc": "01:00:30:00",
+    "end_tc": "01:00:35:00",
+    "duration_sec": 5,
+    "grade": "優秀",
+    "score": 40,
+    "reason": "輔助空鏡"
+  },
+  {
+    "shot_idx": 7,
+    "start_tc": "01:00:35:00",
+    "end_tc": "01:00:40:00",
+    "duration_sec": 5,
+    "grade": "史詩",
+    "score": 80,
+    "reason": "氛圍完整"
+  }
+]
