@@ -1,0 +1,10 @@
+{
+  "LibreHardwareMonitor-MPL-2.0.txt": "https://raw.githubusercontent.com/LibreHardwareMonitor/LibreHardwareMonitor/v0.9.6/LICENSE",
+  "LibreHardwareMonitor-THIRD-PARTY-NOTICES.txt": "https://raw.githubusercontent.com/LibreHardwareMonitor/LibreHardwareMonitor/v0.9.6/THIRD-PARTY-NOTICES.txt",
+  "HidSharp-Apache-2.0.txt": "https://raw.githubusercontent.com/SeekHisKingdom/HIDSharp/vine/LICENSE.txt",
+  "HidSharp-NOTICE.txt": "https://raw.githubusercontent.com/SeekHisKingdom/HIDSharp/vine/NOTICE.txt",
+  "dotnet-MIT.txt": "https://raw.githubusercontent.com/dotnet/runtime/main/LICENSE.TXT",
+  "BlackSharp-MPL-2.0.txt": "https://raw.githubusercontent.com/Blacktempel/BlackSharp/master/LICENSE",
+  "DiskInfoToolkit-MPL-2.0.txt": "https://raw.githubusercontent.com/Blacktempel/DiskInfoToolkit/master/LICENSE",
+  "RAMSPDToolkit-MPL-2.0.txt": "https://raw.githubusercontent.com/Blacktempel/RAMSPDToolkit/master/LICENSE"
+}

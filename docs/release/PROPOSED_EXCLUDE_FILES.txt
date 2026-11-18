@@ -1,0 +1,16 @@
+ACTUAL LOCAL FILES EXCLUDED FROM SOURCE COMMIT
+AI Director Studio.exe
+docs/ORIGINAL_SOURCE_HASHES.json
+docs/RELEASE_FILES_SHA256.txt
+
+POLICY EXCLUSIONS
+.local/ (settings, backups, logs, test evidence)
+.venv/ and other environment directories
+.agents/, .codex/, .vscode/, .idea/ (developer tools)
+00_Agent/ (new internal reports; existing tracked governance is retained)
+04_Models/** (except .gitkeep)
+02_Data/** (except public placeholders)
+05_Output/** and 03_Code/05_Output/**
+GGUF/mmproj/Whisper weights; video/audio footage
+.env*, credentials, private keys, signed-in user configuration
+archives and full build output; root pythonw.exe; .lnk shortcuts

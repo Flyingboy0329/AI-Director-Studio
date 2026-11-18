@@ -1,0 +1,26 @@
+00_Agent/AGENT_RULES.md
+00_Agent/CHANGE_LOG.md
+00_Agent/DECISION_LOG.md
+00_Agent/PROJECT_AUDIT_QWEN36.md
+00_Agent/PROJECT_OVERVIEW.md
+00_Agent/PROJECT_STATE.md
+00_Agent/TASK_QUEUE.md
+01_Project/project_scope.md
+01_Project/啟動 AI Director.bat
+03_Code/01_Input/.gitkeep
+03_Code/02_Data/.gitkeep
+03_Code/tests/test_add_marker.lua
+03_Code/tests/test_import.lua
+03_Code/tests/test_timeline.lua
+AGENTS.md
+legacy_archive/app_gui_redesign.py
+legacy_archive/audio_transcribe.py
+legacy_archive/auto_apply_markers.py
+legacy_archive/director.py
+legacy_archive/dryrun_test.py
+legacy_archive/export_markers.py
+legacy_archive/integrate_timeline.py
+legacy_archive/report.py
+legacy_archive/syntax_check.py
+legacy_archive/test_run.py
+legacy_archive/vision_analyze.py

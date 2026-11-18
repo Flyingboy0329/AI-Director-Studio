@@ -1,0 +1,13 @@
+{
+  "model_dir": "04_Models",
+  "model_mode": "llm_only",
+  "whisper_model": "",
+  "vlm_path": "",
+  "mmproj_path": "",
+  "llm_path": "",
+  "llm_mmproj_path": "",
+  "llm_url": "http://127.0.0.1:8080",
+  "vlm_url": "http://127.0.0.1:8081",
+  "server_path": "",
+  "context_size": 8192
+}

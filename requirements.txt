@@ -1,0 +1,11 @@
+PyQt6>=6.5
+psutil>=5.9
+numpy>=1.24
+opencv-python>=4.8
+torch>=2.4
+faster-whisper>=1.1
+filelock>=3
+pyautogui>=0.9.54
+pyperclip>=1.8
+nvidia-ml-py>=12; platform_system != "Darwin"
+-r requirements-cpu-sensor.txt

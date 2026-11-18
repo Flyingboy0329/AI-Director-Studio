@@ -1,0 +1,26 @@
+03_Code/05_Output/.gitkeep
+03_Code/05_Output/reports/davinci_markers.edl
+03_Code/05_Output/reports/shot_regions_summary.json
+03_Code/05_Output/reports/test_region_markers.edl
+03_Code/05_Output/test_marker_task.lua
+03_Code/__pycache__/.gitkeep
+03_Code/__pycache__/audio_transcribe.cpython-310.pyc
+03_Code/__pycache__/director.cpython-310.pyc
+03_Code/__pycache__/export_davinci_markers.cpython-310.pyc
+03_Code/__pycache__/integrate_timeline.cpython-310.pyc
+03_Code/__pycache__/main.cpython-310.pyc
+03_Code/__pycache__/main.cpython-311.pyc
+03_Code/__pycache__/video_extract.cpython-310.pyc
+03_Code/__pycache__/vision_analyze.cpython-310.pyc
+03_Code/__pycache__/watch_folder.cpython-310.pyc
+03_Code/ai/__pycache__/audio_analyzer.cpython-310.pyc
+03_Code/ai/__pycache__/audio_analyzer.cpython-311.pyc
+03_Code/ai/__pycache__/video_extract.cpython-310.pyc
+03_Code/ai/__pycache__/video_extract.cpython-311.pyc
+03_Code/ai/__pycache__/vision_analyzer.cpython-310.pyc
+03_Code/ai/__pycache__/vision_analyzer.cpython-311.pyc
+03_Code/bridge/__pycache__/auto_injector.cpython-310.pyc
+03_Code/bridge/__pycache__/auto_injector.cpython-311.pyc
+03_Code/pipeline/__pycache__/director_decision.cpython-310.pyc
+AI Director Studio.lnk
+pythonw.exe

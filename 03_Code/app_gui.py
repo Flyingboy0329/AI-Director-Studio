@@ -1,7 +1,13 @@
-﻿import sys
+import sys
 import os
+from python_environment import ensure_environment
+
+if __name__ == "__main__":
+    ensure_environment()
+
 import time
 import queue
+import threading
 import traceback
 import subprocess
 import ctypes
@@ -15,7 +21,7 @@ from datetime import datetime
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QTextEdit, QProgressBar,
-    QFileDialog, QFrame, QSizePolicy, QDialog, QTableWidget, QTableWidgetItem, QHeaderView
+    QFileDialog, QFrame, QSizePolicy, QDialog, QScrollArea, QGridLayout, QMessageBox
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QRectF, QPointF
 from PyQt6.QtGui import QFont, QPainter, QColor, QPen, QBrush, QConicalGradient, QLinearGradient, QIcon, QPixmap, QPolygonF, QTextCursor
@@ -27,14 +33,6 @@ try:
 except Exception:
     pass
 
-NVML_AVAILABLE = False
-try:
-    import pynvml
-    pynvml.nvmlInit()
-    NVML_AVAILABLE = True
-except Exception:
-    NVML_AVAILABLE = False
-
 LOG_FILE = Path(__file__).resolve().parent.parent / "05_Output" / "logs" / "gui_error.log"
 def excepthook(exc_type, exc_value, exc_tb):
     LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -44,9 +42,11 @@ def excepthook(exc_type, exc_value, exc_tb):
     sys.__excepthook__(exc_type, exc_value, exc_tb)
 sys.excepthook = excepthook
 
+from path_utils import get_project_root, get_settings_file, load_local_settings, resolve_project_path
+
 CODE_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = CODE_DIR.parent
-CONFIG_FILE = PROJECT_ROOT / "01_Project" / "user_config.json"
+PROJECT_ROOT = get_project_root()
+CONFIG_FILE = get_settings_file("user_config.json")
 
 sys.path.insert(0, str(CODE_DIR))
 sys.path.append(str(CODE_DIR / "bridge"))
@@ -54,20 +54,20 @@ sys.path.append(str(CODE_DIR / "bridge"))
 from main import run_main_pipeline
 from watch_folder import wait_for_file_ready, SUPPORTED_EXT
 from auto_injector import check_resolve_running
+from config_manager import load_user_config, save_user_config
+from cpu_temperature import package_value, temperature_color, temperature_limits
+from hardware_monitor import HardwareMonitor
+from model_selection import ModelSelectionPanel, ScrollSafeComboBox
+from ai_sampling import RATES, validate_rate
+from storage_inventory import storage_text
+from hardware_guide import ROWS as GUIDE_ROWS, ARCHITECTURES, guide_text
+from cancellation import AnalysisCancelled, check_cancelled
 
 # 讀取並持久化使用者偏好路徑
 def load_saved_watch_dir():
-    default_dir = str((PROJECT_ROOT / "02_Data").resolve())
-    if CONFIG_FILE.exists():
-        try:
-            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                saved_path = data.get("watch_dir", "")
-                if saved_path and os.path.exists(saved_path):
-                    return saved_path
-        except Exception:
-            pass
-    return default_dir
+    data = load_local_settings("user_config.json")
+    path = resolve_project_path(data.get("watch_dir"), "02_Data")
+    return str(path if path.is_dir() else PROJECT_ROOT / "02_Data")
 
 def save_watch_dir_to_config(path_str):
     try:
@@ -84,20 +84,6 @@ def save_watch_dir_to_config(path_str):
             json.dump(config_data, f, ensure_ascii=False, indent=2)
     except Exception:
         pass
-
-def get_gpu_telemetry_fallback():
-    gpu_data = []
-    try:
-        cmd = "nvidia-smi --query-gpu=memory.used,memory.total,temperature.gpu --format=csv,noheader,nounits"
-        out = subprocess.check_output(cmd, shell=True, creationflags=subprocess.CREATE_NO_WINDOW).decode()
-        for line in out.strip().split("\n"):
-            parts = [p.strip() for p in line.split(",")]
-            if len(parts) >= 3 and parts[0].isdigit():
-                u_mb, t_mb, temp = float(parts[0]), float(parts[1]), int(parts[2])
-                gpu_data.append((u_mb / 1024.0, t_mb / 1024.0, (u_mb / t_mb) * 100.0, temp))
-    except Exception:
-        pass
-    return gpu_data
 
 def create_app_icon():
     ico_path = PROJECT_ROOT / "01_Project" / "app_icon.ico"
@@ -206,11 +192,12 @@ class RingMeter(QWidget):
 
         painter.setPen(QColor("#8C9BAE"))
         painter.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
-        painter.drawText(QRectF(0, h * 0.18, w, 16), Qt.AlignmentFlag.AlignCenter, self.title)
+        title = painter.fontMetrics().elidedText(self.title, Qt.TextElideMode.ElideRight, w - 8)
+        painter.drawText(QRectF(0, h * 0.18, w, 16), Qt.AlignmentFlag.AlignCenter, title)
 
         painter.setPen(QColor("#F0F6FC"))
         painter.setFont(QFont("Consolas", 12, QFont.Weight.Bold))
-        painter.drawText(QRectF(0, h * 0.36, w, 22), Qt.AlignmentFlag.AlignCenter, f"{int(self.percent)}%")
+        painter.drawText(QRectF(0, h * 0.36, w, 22), Qt.AlignmentFlag.AlignCenter, f"{int(self.percent)}%" if getattr(self, "percent_available", True) else "N/A")
 
         painter.setPen(QColor("#56D6C2"))
         painter.setFont(QFont("Segoe UI", 7))
@@ -279,25 +266,18 @@ class RamTankMeter(QWidget):
 
 # ===== 3. 全色溫動態水銀溫度計 =====
 class ThermoMeter(QWidget):
-    def __init__(self, width=34, height=115):
+    def __init__(self, width=34, height=115, device="cpu"):
         super().__init__()
         self.setFixedSize(width, height)
-        self.temp_val = 30
+        self.temp_val = None
+        self.device = device
 
     def set_temp(self, temp):
-        if temp > 0:
-            self.temp_val = max(10, min(105, temp))
+        self.temp_val = package_value(temp)
         self.update()
 
     def get_color(self, t):
-        if t <= 42:
-            return QColor("#10B981")
-        elif t <= 58:
-            return QColor("#FBBF24")
-        elif t <= 75:
-            return QColor("#F97316")
-        else:
-            return QColor("#EF4444")
+        return QColor(temperature_color(self.device, t))
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -315,9 +295,9 @@ class ThermoMeter(QWidget):
         painter.drawRoundedRect(tube_rect, 4, 4)
         painter.drawEllipse(bulb_rect)
 
-        ratio = max(0.05, min(1.0, (self.temp_val - 25) / 70.0))
+        ratio = max(0.05, min(1.0, (self.temp_val - 25) / 70.0)) if self.temp_val is not None else 0
         fill_h = ratio * (tube_h - 4)
-        col = self.get_color(self.temp_val)
+        col = self.get_color(self.temp_val) if self.temp_val is not None else QColor("#717B9E")
 
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(col)
@@ -327,12 +307,12 @@ class ThermoMeter(QWidget):
 
         painter.setPen(col)
         painter.setFont(QFont("Consolas", 7, QFont.Weight.Bold))
-        painter.drawText(QRectF(0, h - 10, w, 11), Qt.AlignmentFlag.AlignCenter, f"{int(self.temp_val)}°C")
+        painter.drawText(QRectF(0, h - 10, w, 11), Qt.AlignmentFlag.AlignCenter, f"{int(self.temp_val)}°C" if self.temp_val is not None else "N/A")
         painter.end()
 
 # ===== 4. 本機硬碟磁貼小卡片 =====
 class DiskTile(QFrame):
-    def __init__(self, drive_letter="C:"):
+    def __init__(self, drive_letter=""):
         super().__init__()
         self.drive_letter = drive_letter
         self.setStyleSheet("""
@@ -365,6 +345,7 @@ class DiskTile(QFrame):
         l.addWidget(self.lbl_info)
 
     def update_disk(self, total_gb, free_gb, percent):
+        self.bar.show()
         self.bar.setValue(int(percent))
         if percent >= 90:
             self.bar.setStyleSheet("QProgressBar { background: #1A1D2E; border: none; border-radius: 3px; } QProgressBar::chunk { background: #EF4444; border-radius: 3px; }")
@@ -372,40 +353,77 @@ class DiskTile(QFrame):
             self.bar.setStyleSheet("QProgressBar { background: #1A1D2E; border: none; border-radius: 3px; } QProgressBar::chunk { background: #00B4D8; border-radius: 3px; }")
         self.lbl_info.setText(f"剩餘 {int(free_gb)} GB / 共 {int(total_gb)} GB")
 
+    def clear_disk(self):
+        self.lbl_name.clear()
+        self.lbl_info.clear()
+        self.bar.setValue(0)
+        self.bar.hide()
+        self.setToolTip("")
+
 # ===== 5. 更多... 彈窗 =====
-class DiskDetailDialog(QDialog):
-    def __init__(self, parent=None):
+class InfoTextDialog(QDialog):
+    """Small nonmodal, copyable, read-only information window."""
+    def __init__(self, title, text="", parent=None):
         super().__init__(parent)
-        self.setWindowTitle("全機存儲磁碟陣列詳情")
-        self.resize(520, 260)
-        self.setStyleSheet("""
-            QDialog { background-color: #0E101E; color: #F0F6FC; }
-            QTableWidget { background-color: #121424; border: 1px solid #1F233D; color: #E2E8F0; gridline-color: #1F233D; border-radius: 8px; }
-            QHeaderView::section { background-color: #1B1E36; color: #00F5D4; font-weight: bold; border: none; padding: 6px; }
-        """)
-        l = QVBoxLayout(self)
-        table = QTableWidget()
-        l.addWidget(table)
+        self.setWindowTitle(title)
+        if parent:
+            self.setWindowIcon(parent.windowIcon())
+        self.resize(540, 400)
+        self.setMinimumSize(360, 240)
+        self.setStyleSheet("QDialog { background: #0E101E; color: #E2E8F0; }"
+                           "QLabel { background: transparent; color: #00F5D4; font-weight: bold; }")
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 14, 16, 16)
+        layout.addWidget(QLabel(title))
+        self.body = QTextEdit()
+        self.body.setReadOnly(True)
+        self.body.setAcceptRichText(False)
+        self.body.setStyleSheet("QTextEdit { background: #090A12; color: #E2E8F0; border: 1px solid #232742;"
+                                "border-radius: 8px; padding: 10px; font-size: 12px; selection-background-color: #384568; }"
+                                "QScrollBar:vertical { background: #121424; width: 8px; }"
+                                "QScrollBar::handle:vertical { background: #3A4066; min-height: 24px; }")
+        layout.addWidget(self.body)
+        self.set_text(text)
 
-        partitions = [p for p in psutil.disk_partitions() if 'fixed' in p.opts or 'rw' in p.opts]
-        table.setColumnCount(5)
-        table.setHorizontalHeaderLabels(["掛載槽位", "檔案系統", "總容量", "剩餘空間", "佔用率"])
-        table.setRowCount(len(partitions))
-        table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+    def set_text(self, text):
+        if self.body.toPlainText() != text:
+            position = self.body.verticalScrollBar().value()
+            self.body.setPlainText(text)
+            self.body.verticalScrollBar().setValue(position)
 
-        for i, part in enumerate(partitions):
-            try:
-                usage = psutil.disk_usage(part.mountpoint)
-                tot = f"{usage.total / (1024**3):.1f} GB"
-                free = f"{usage.free / (1024**3):.1f} GB"
-                pct = f"{usage.percent}%"
-                table.setItem(i, 0, QTableWidgetItem(part.device))
-                table.setItem(i, 1, QTableWidgetItem(part.fstype))
-                table.setItem(i, 2, QTableWidgetItem(tot))
-                table.setItem(i, 3, QTableWidgetItem(free))
-                table.setItem(i, 4, QTableWidgetItem(pct))
-            except Exception:
-                pass
+    def showEvent(self, event):
+        super().showEvent(event)
+        enable_windows_dark_titlebar(int(self.winId()))
+
+
+class HardwareGuideDialog(InfoTextDialog):
+    def __init__(self, combo_style, architecture="B", parent=None):
+        super().__init__("硬體配置與 AI 架構指南", parent=parent)
+        self.resize(740, 580)
+        controls = QHBoxLayout()
+        controls.addWidget(QLabel("VRAM 級距"))
+        self.vram = ScrollSafeComboBox()
+        for row in GUIDE_ROWS:
+            self.vram.addItem(f"{row['vram']} GB", row["vram"])
+        self.vram.setCurrentIndex(self.vram.findData(16))
+        controls.addWidget(self.vram)
+        self.architecture = ScrollSafeComboBox()
+        for key in ARCHITECTURES:
+            self.architecture.addItem(f"方案 {key}", key)
+        self.architecture.setCurrentIndex(self.architecture.findData(architecture))
+        controls.addWidget(self.architecture)
+        controls.addStretch()
+        self.layout().insertLayout(1, controls)
+        for combo in (self.vram, self.architecture):
+            combo.setStyleSheet(combo_style)
+            combo.setMinimumHeight(32)
+            combo.currentIndexChanged.connect(self.refresh_guide)
+        self.refresh_guide()
+
+    def refresh_guide(self):
+        self.set_text(guide_text(self.vram.currentData(), self.architecture.currentData()))
+        self.body.verticalScrollBar().setValue(0)
+
 
 MIDNIGHT_QSS = """
 QMainWindow {
@@ -494,71 +512,25 @@ QTextEdit.TerminalLog {
 """
 
 class TelemetryThread(QThread):
-    telemetry_signal = pyqtSignal(float, int, float, str, float, str, int, float, str, int, list, bool)
+    telemetry_signal = pyqtSignal(object)
 
     def __init__(self):
         super().__init__()
         self.running = True
 
     def run(self):
-        while self.running:
-            try:
-                cpu_pct = psutil.cpu_percent(interval=None)
-                cpu_temp = int(36 + (cpu_pct * 0.45))
-                
-                mem = psutil.virtual_memory()
-                ram_pct = mem.percent
-                ram_val = f"{mem.used/(1024**3):.1f}/{mem.total/(1024**3):.1f}G"
-
-                g0_pct, g0_val, g0_temp = 0.0, "0.0/16.0G", 0
-                g1_pct, g1_val, g1_temp = 0.0, "0.0/12.0G", 0
-
-                nvml_success = False
-                if NVML_AVAILABLE:
-                    try:
-                        cnt = pynvml.nvmlDeviceGetCount()
-                        if cnt >= 1:
-                            h0 = pynvml.nvmlDeviceGetHandleByIndex(0)
-                            info0 = pynvml.nvmlDeviceGetMemoryInfo(h0)
-                            u0_gb = info0.used / (1024**3)
-                            t0_gb = info0.total / (1024**3)
-                            g0_pct = (info0.used / info0.total) * 100.0
-                            g0_val = f"{u0_gb:.1f}/{t0_gb:.1f}G"
-                            g0_temp = int(pynvml.nvmlDeviceGetTemperature(h0, pynvml.NVML_TEMPERATURE_GPU))
-                        if cnt >= 2:
-                            h1 = pynvml.nvmlDeviceGetHandleByIndex(1)
-                            info1 = pynvml.nvmlDeviceGetMemoryInfo(h1)
-                            u1_gb = info1.used / (1024**3)
-                            t1_gb = info1.total / (1024**3)
-                            g1_pct = (info1.used / info1.total) * 100.0
-                            g1_val = f"{u1_gb:.1f}/{t1_gb:.1f}G"
-                            g1_temp = int(pynvml.nvmlDeviceGetTemperature(h1, pynvml.NVML_TEMPERATURE_GPU))
-                        nvml_success = True
-                    except Exception:
-                        nvml_success = False
-
-                if not nvml_success or g0_val == "0.0/16.0G":
-                    fb_data = get_gpu_telemetry_fallback()
-                    if len(fb_data) >= 1:
-                        u0_gb, t0_gb, g0_pct, g0_temp = fb_data[0]
-                        g0_val = f"{u0_gb:.1f}/{t0_gb:.1f}G"
-                    if len(fb_data) >= 2:
-                        u1_gb, t1_gb, g1_pct, g1_temp = fb_data[1]
-                        g1_val = f"{u1_gb:.1f}/{t1_gb:.1f}G"
-
-                disks_data = []
-                for d in ["C:\\", "D:\\", "E:\\"]:
-                    try:
-                        u = psutil.disk_usage(d)
-                        disks_data.append((d[0], u.total/(1024**3), u.free/(1024**3), u.percent))
-                    except Exception:
-                        pass
-
-                resolve_on, _ = check_resolve_running()
-                self.telemetry_signal.emit(cpu_pct, cpu_temp, ram_pct, ram_val, g0_pct, g0_val, g0_temp, g1_pct, g1_val, g1_temp, disks_data, resolve_on)
-            except Exception:
-                pass
-            time.sleep(1.5)
+        monitor = HardwareMonitor()
+        try:
+            while self.running:
+                try:
+                    data = monitor.snapshot()
+                    data["resolve_on"] = check_resolve_running()[0]
+                    self.telemetry_signal.emit(data)
+                except Exception:
+                    pass
+                time.sleep(1.5)
+        finally:
+            monitor.close()
 
     def stop(self):
         self.running = False
@@ -568,64 +540,101 @@ class WorkerThread(QThread):
     log_signal = pyqtSignal(str)
     queue_signal = pyqtSignal(int)
 
-    def __init__(self, watch_dir, prompt_text):
+    def __init__(self, watch_dir, prompt_text, whisper_model=None, model_settings=None):
         super().__init__()
         self.watch_dir = Path(watch_dir)
         self.prompt_text = prompt_text
+        self.whisper_model = whisper_model
+        self.model_settings = dict(model_settings or {})
         self.is_watching = True
         self.task_queue = queue.Queue()
         self.processed = set()
+        self.cancel_event = threading.Event()
+
+    def process_file(self, target):
+        wait_for_file_ready(target, cancel_event=self.cancel_event)
+        for attempt in range(1, 4):
+            check_cancelled(self.cancel_event)
+            try:
+                old_stdout = sys.stdout
+                sys.stdout = EmittingStream(self.log_signal.emit)
+                try:
+                    return run_main_pipeline(str(target), context_prompt=self.prompt_text,
+                        whisper_model=self.whisper_model, model_settings=self.model_settings,
+                        cancel_event=self.cancel_event)
+                finally:
+                    sys.stdout = old_stdout
+            except AnalysisCancelled:
+                raise
+            except Exception as exc:
+                self.log_signal.emit(f"[自動恢復] 素材 {target.name} 第 {attempt}/3 次未完成：{exc}")
+                if attempt < 3:
+                    self.cancel_event.wait(attempt)
+                    check_cancelled(self.cancel_event)
+        self.log_signal.emit(f"⚠️ 素材 {target.name} 重試後仍未完成，保留現有結果並繼續其它素材。")
+        return False
 
     def run(self):
-        for f in self.watch_dir.glob("*.*"):
-            if f.suffix.lower() in SUPPORTED_EXT:
-                self.processed.add(f.resolve())
         self.log_signal.emit("⚡ 哨兵監聽線上待命中，收件匣管線已鎖定。")
 
+        # 啟動獨立非同步掃描執行緒（不被運算卡住）
+        import threading
+        def scanner_loop():
+            while self.is_watching:
+                try:
+                    if self.watch_dir.exists() and self.watch_dir.is_dir():
+                        files = [f for f in self.watch_dir.glob("*.*") if f.suffix.lower() in SUPPORTED_EXT]
+                        for f in files:
+                            if "_clean" in f.name or "_audio" in f.name or "_video" in f.name:
+                                continue
+                            rf = f.resolve()
+                            if rf not in self.processed:
+                                self.processed.add(rf)
+                                self.task_queue.put(rf)
+                                self.queue_signal.emit(self.task_queue.qsize())
+                                self.log_signal.emit(f"📥 捕獲全新素材並排入佇列: {f.name}")
+                except Exception:
+                    pass
+                time.sleep(1.0)
+
+        scanner = threading.Thread(target=scanner_loop, daemon=True)
+        scanner.start()
+
+        # 工作消費迴圈
         while self.is_watching:
             try:
-                files = [f for f in self.watch_dir.glob("*.*") if f.suffix.lower() in SUPPORTED_EXT]
-                for f in files:
-                    rf = f.resolve()
-                    if rf not in self.processed:
-                        self.processed.add(rf)
-                        self.task_queue.put(rf)
-                        self.queue_signal.emit(self.task_queue.qsize())
-                        self.log_signal.emit(f"📥 捕獲全新素材: {f.name}")
-
                 if not self.task_queue.empty():
+                    # 正在處理時，佇列顯示的是剩餘數量 + 正在處理中的總數
+                    current_qsize = self.task_queue.qsize()
+                    self.queue_signal.emit(current_qsize)
+
                     target = self.task_queue.get()
-                    self.queue_signal.emit(self.task_queue.qsize())
                     fname = target.name
 
                     self.log_signal.emit(f"▶ 啟動影音特徵提取與語義決策: {fname}")
-                    wait_for_file_ready(target)
-
-                    old_stdout = sys.stdout
-                    stream_interceptor = EmittingStream(self.log_signal.emit)
-                    sys.stdout = stream_interceptor
-
                     try:
-                        ok = run_main_pipeline(str(target), context_prompt=self.prompt_text)
+                        ok = self.process_file(target)
                     finally:
-                        sys.stdout = old_stdout
+                        self.task_queue.task_done()
+                        self.queue_signal.emit(self.task_queue.qsize())
 
                     if ok:
-                        self.log_signal.emit(f"🎉 素材 [{fname}] 決策標記已成功注入 DaVinci Resolve！")
+                        self.log_signal.emit(f"素材 [{fname}] 分析完成，Lua 指令已送出；不等待寫入確認，繼續下一支素材。")
                     else:
-                        self.log_signal.emit(f"❌ 素材 [{fname}] 處理中斷。")
-
-                    self.task_queue.task_done()
-                    self.queue_signal.emit(self.task_queue.qsize())
-
-                time.sleep(1.5)
+                        self.log_signal.emit(f"⚠️ 素材 [{fname}] 尚未確認完成，已保留可用結果；繼續收件匣任務。")
+                else:
+                    time.sleep(0.5)
+            except AnalysisCancelled:
+                self.log_signal.emit("分析已取消，正在結束本次監看；GGUF 模型保持載入。")
+                break
             except Exception as e:
                 self.log_signal.emit(f"⚠️ 異常: {e}")
-                time.sleep(2)
+                time.sleep(1.0)
 
     def stop(self):
         self.is_watching = False
-        self.wait()
+        self.cancel_event.set()
+        self.log_signal.emit("⚡ 停止監看指令已下達，取消後續分析；不卸除 GGUF 模型。")
 
 class MidnightDashboardWindow(QMainWindow):
     def __init__(self):
@@ -639,7 +648,11 @@ class MidnightDashboardWindow(QMainWindow):
 
         # 優先從持久化配置讀取上次設定的路徑
         self.watch_dir = load_saved_watch_dir()
+        self.user_config = load_user_config()
         self.worker = None
+        self.pending_model_unload = False
+        self.close_after_worker = False
+        self.is_compact_mode = False
 
         self.init_ui()
         self.start_telemetry()
@@ -677,6 +690,16 @@ class MidnightDashboardWindow(QMainWindow):
         h_layout.addLayout(t_box)
 
         h_layout.addStretch()
+
+        self.title_widgets = (logo, ver)
+        self.btn_toggle_view = QPushButton("📌 簡約視窗")
+        self.btn_toggle_view.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_toggle_view.setStyleSheet(
+            "QPushButton { background: #161A2E; color: #00F5D4; border: 1px solid #00F5D4;"
+            "border-radius: 8px; padding: 4px 12px; font-size: 11px; font-weight: bold; }"
+            "QPushButton:hover { background: #00F5D4; color: #0B0C16; }")
+        self.btn_toggle_view.clicked.connect(self.toggle_view_mode)
+        h_layout.addWidget(self.btn_toggle_view)
 
         self.badge_resolve = QLabel("RESOLVE: DETECTING")
         self.badge_resolve.setProperty("class", "PillBadge")
@@ -749,13 +772,15 @@ class MidnightDashboardWindow(QMainWindow):
         disk_l.addWidget(lbl_disk_title)
         disk_l.addSpacing(10)
 
+        self.storage_disks = []
         self.disk_tiles_box = QHBoxLayout()
-        self.disk_c = DiskTile("C:")
-        self.disk_d = DiskTile("D:")
-        self.disk_e = DiskTile("E:")
-        self.disk_tiles_box.addWidget(self.disk_c)
-        self.disk_tiles_box.addWidget(self.disk_d)
-        self.disk_tiles_box.addWidget(self.disk_e)
+        self.disk_tiles_box.setSpacing(0)
+        self.disk_tiles = []
+        for letter in ("C:", "D:", "E:"):
+            tile = DiskTile(letter)
+            tile.clear_disk()
+            self.disk_tiles_box.addWidget(tile, 1)
+            self.disk_tiles.append(tile)
         disk_l.addLayout(self.disk_tiles_box)
 
         more_row = QHBoxLayout()
@@ -777,32 +802,25 @@ class MidnightDashboardWindow(QMainWindow):
         lbl_gpu_title.setText(
             "<div style='line-height: 100%; margin: 0px; padding: 0px;'>"
             "<span style='font-size: 13px; font-weight: bold; color: #E2E8F0; letter-spacing: 0.5px;'>GPU ACCELERATION</span><br>"
-            "<span style='font-size: 11px; color: #717B9E; line-height: 140%;'>硬體加速核心顯存佔用與即時溫度監控</span>"
+            "<span style='font-size: 11px; color: #717B9E; line-height: 140%;'>自動偵測顯存／共享記憶體；無感測資料顯示不可用</span>"
             "</div>"
         )
         gpu_l.addWidget(lbl_gpu_title)
         gpu_l.addSpacing(12)
 
-        gpu_meter_box = QHBoxLayout()
-        gpu_meter_box.addSpacing(25)
-        self.ring_gpu0 = RingMeter(title="RTX 5060 Ti", start_color="#00F5D4", end_color="#0077B6", size=112)
-        self.thermo_gpu0 = ThermoMeter(width=34, height=112)
-
-        self.ring_gpu1 = RingMeter(title="RTX 3060", start_color="#C084FC", end_color="#FF007F", size=112)
-        self.thermo_gpu1 = ThermoMeter(width=34, height=112)
-
-        gpu_meter_box.addWidget(self.ring_gpu0)
-        gpu_meter_box.addSpacing(4)
-        gpu_meter_box.addWidget(self.thermo_gpu0)
-        gpu_meter_box.addSpacing(18)
-        gpu_meter_box.addWidget(self.ring_gpu1)
-        gpu_meter_box.addSpacing(4)
-        gpu_meter_box.addWidget(self.thermo_gpu1)
-        gpu_meter_box.addStretch()
-        gpu_l.addLayout(gpu_meter_box)
+        self.gpu_meter_box = QGridLayout()
+        self.gpu_widgets = {}
+        self.gpu_empty = QLabel("Detecting accelerator / memory...")
+        self.gpu_empty.setWordWrap(True)
+        gpu_l.addWidget(self.gpu_empty)
+        gpu_l.addLayout(self.gpu_meter_box)
         col_left.addWidget(card_gpus)
 
-        upper_box.addLayout(col_left, stretch=3)
+        left_widget = QWidget()
+        col_left.setContentsMargins(0, 0, 0, 0)
+        left_widget.setLayout(col_left)
+        upper_box.addWidget(left_widget, stretch=3)
+        self.card_disk = card_disk
 
         # ======================================================================
         # ===== 中欄：超大面積 Prompt 輸入 =====
@@ -816,20 +834,39 @@ class MidnightDashboardWindow(QMainWindow):
         lbl_cp_title = QLabel()
         lbl_cp_title.setText(
             "<div style='line-height: 100%; margin: 0px; padding: 0px;'>"
-            "<span style='font-size: 13px; font-weight: bold; color: #E2E8F0; letter-spacing: 0.5px;'>DOMAIN CONTEXT PROMPT</span><br>"
-            "<span style='font-size: 11px; color: #717B9E; line-height: 140%;'>動態特徵提示詞注入，大幅降低專業術語同音錯字機率</span>"
+            "<span style='font-size: 13px; font-weight: bold; color: #E2E8F0; letter-spacing: 0.5px;'>EDITING CONTEXT</span><br>"
+            "<span style='font-size: 11px; color: #717B9E; line-height: 140%;'>影片用途、剪輯目標與希望保留的事件；不作為素材事實</span>"
             "</div>"
         )
         cp_l.addWidget(lbl_cp_title)
         cp_l.addSpacing(12)
 
         self.edit_prompt = QTextEdit()
-        self.edit_prompt.setPlaceholderText("請在此輸入影音領域專有名詞、角色名字、電競術語或地名（支援多行換行輸入）...")
-        self.edit_prompt.setText("日常生活旅遊 Vlog，包含特戰英豪遊戲術語（蓋克、拆包、大絕）、飯店電器開箱、日本地名與生活閒聊對話。")
+        self.edit_prompt.setPlaceholderText("例如：旅遊紀錄，保留有具體事件、互動或能交代路線的片段；避開重複空鏡。")
+        self.edit_prompt.setText(self.user_config["context_prompt"])
         cp_l.addWidget(self.edit_prompt)
-        col_mid.addWidget(card_prompt)
+        self.prompt_card = card_prompt
+        card_prompt.setMinimumHeight(260)
+        col_mid.addWidget(card_prompt, stretch=2)
+        self.model_panel = ModelSelectionPanel()
+        self.model_panel.help_requested.connect(self.show_model_help)
+        self.model_panel.runtime_log.connect(self.append_log)
+        self.model_panel.runtime_ready.connect(self.on_model_ready)
+        self.model_panel.runtime_stopped.connect(self.on_models_stopped)
+        self.model_panel.unload_requested.connect(self.request_model_unload)
+        self.start_after_model = False
+        model_scroll = QScrollArea()
+        model_scroll.setWidgetResizable(True)
+        model_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        model_scroll.setStyleSheet("QScrollArea { background: transparent; } QScrollBar:vertical { background: #121424; width: 8px; } QScrollBar::handle:vertical { background: #3A4066; min-height: 24px; }")
+        model_scroll.setWidget(self.model_panel)
+        self.model_scroll = model_scroll
+        col_mid.addWidget(model_scroll, stretch=4)
 
-        upper_box.addLayout(col_mid, stretch=4)
+        self.col_mid_widget = QWidget()
+        col_mid.setContentsMargins(0, 0, 0, 0)
+        self.col_mid_widget.setLayout(col_mid)
+        upper_box.addWidget(self.col_mid_widget, stretch=4)
 
         # ======================================================================
         # ===== 右欄：即時日誌終端 =====
@@ -866,16 +903,20 @@ class MidnightDashboardWindow(QMainWindow):
         cl_l.addWidget(self.txt_log)
         col_right.addWidget(card_log)
 
-        upper_box.addLayout(col_right, stretch=3)
+        self.col_right_widget = QWidget()
+        col_right.setContentsMargins(0, 0, 0, 0)
+        self.col_right_widget.setLayout(col_right)
+        upper_box.addWidget(self.col_right_widget, stretch=3)
         body_layout.addLayout(upper_box, stretch=1)
 
         # ======================================================================
         # ===== 下方細長條 Pipeline (支援路徑修改自動儲存) =====
         # ======================================================================
         card_watch = self.make_card()
+        self.card_watch = card_watch
         cw_l = QHBoxLayout(card_watch)
         cw_l.setContentsMargins(20, 10, 20, 10)
-        cw_l.setSpacing(14)
+        cw_l.setSpacing(10)
 
         title_box_w = QLabel()
         title_box_w.setText(
@@ -887,6 +928,8 @@ class MidnightDashboardWindow(QMainWindow):
         cw_l.addWidget(title_box_w)
 
         self.edit_path = QLineEdit(self.watch_dir)
+        self.edit_path.setMinimumWidth(100)
+        self.edit_path.setToolTip(self.watch_dir)
         self.edit_path.textChanged.connect(self.on_path_text_changed)
         btn_browse = QPushButton("探勘目錄")
         btn_browse.setProperty("class", "SubPillBtn")
@@ -897,6 +940,39 @@ class MidnightDashboardWindow(QMainWindow):
         self.lbl_queue = QLabel("📦 佇列: 0 部")
         self.lbl_queue.setStyleSheet("color: #FBBF24; font-weight: bold; font-size: 12px; margin-left: 10px; margin-right: 10px;")
         cw_l.addWidget(self.lbl_queue)
+
+        sampling_widget = QWidget()
+        sampling_layout = QVBoxLayout(sampling_widget)
+        sampling_layout.setContentsMargins(0, 0, 0, 0)
+        sampling_layout.setSpacing(2)
+        self.sampling_hint = QLabel("AI 取樣頻率")
+        self.sampling_hint.setStyleSheet("font-size: 10px; color: #A0ABC0;")
+        sampling_header = QHBoxLayout()
+        sampling_header.setContentsMargins(0, 0, 0, 0)
+        sampling_header.setSpacing(6)
+        sampling_header.addWidget(self.sampling_hint)
+        self.sampling_help = QPushButton("說明…")
+        self.sampling_help.setProperty("class", "MoreBtn")
+        self.sampling_help.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.sampling_help.clicked.connect(self.show_sampling_help)
+        sampling_header.addWidget(self.sampling_help)
+        sampling_layout.addLayout(sampling_header)
+        self.ai_sampling = ScrollSafeComboBox()
+        for rate in RATES:
+            self.ai_sampling.addItem(f"{rate:g} 張／秒" + ("（建議）" if rate == 1 else ""), rate)
+        self.ai_sampling.setMinimumWidth(145)
+        self.ai_sampling.setStyleSheet(self.model_panel.selectors["vlm_path"].styleSheet())
+        self.ai_sampling.setMinimumHeight(32)
+        try:
+            rate = validate_rate(self.user_config.get("ai_sampling_fps", 1.0))
+        except (TypeError, ValueError):
+            rate = 1.0
+        self.ai_sampling.setCurrentIndex(self.ai_sampling.findData(rate))
+        self.ai_sampling.setToolTip("只控制 AI 畫面理解。每六秒約 2／3／6／12／24 張；技術分析維持每兩秒一張。高頻率增加耗時、顯存與上下文負擔，可能超出模型容量；不會悄悄降頻。監看期間鎖定。")
+        self.ai_sampling.currentIndexChanged.connect(self.save_sampling_rate)
+        sampling_layout.addWidget(self.ai_sampling)
+        cw_l.addWidget(sampling_widget)
+        self.update_sampling_hint()
 
         self.btn_toggle = QPushButton("⚡ START SENTINEL")
         self.btn_toggle.setProperty("class", "PillBtn")
@@ -913,21 +989,36 @@ class MidnightDashboardWindow(QMainWindow):
         f_layout.setContentsMargins(28, 6, 28, 6)
 
         foot_left = QLabel("AI DIRECTOR STUDIO  |  NEURAL INGESTION & AUTO-MARKER")
+        self.footer_title = foot_left
         foot_left.setStyleSheet("color: #555E7A; font-size: 10px; font-weight: bold; letter-spacing: 0.8px;")
         foot_right = QLabel("Developed by Pan Bo-Han (潘柏翰)  |  指導老師：郭俞霈教授")
+        self.footer_author = foot_right
         foot_right.setStyleSheet("color: #8C9BAE; font-size: 11px; font-weight: bold;")
         f_layout.addWidget(foot_left)
         f_layout.addStretch()
         f_layout.addWidget(foot_right)
         main_layout.addWidget(footer)
 
-        self.append_log("⚡ [系統核心] 完全體工作站已就緒。")
+        self.append_log("⚡ [系統核心] 介面已就緒；模型載入並顯示 READY 後才會開始分析。")
+        self.model_panel.announce_whisper()
 
     def append_log(self, text):
         ts = datetime.now().strftime("%H:%M:%S")
         clean_text = text.strip()
+        if hasattr(self, "model_panel"):
+            self.model_panel.update_whisper_status(clean_text)
         
-        if "▶" in clean_text or "啟動" in clean_text:
+        if "❌" in clean_text or "失敗" in clean_text or "中斷" in clean_text or "failed：" in clean_text:
+            styled = f"<span style='color:#FF758F; font-weight:bold;'>{clean_text}</span>"
+        elif "⚠" in clean_text or "警告" in clean_text:
+            styled = f"<span style='color:#FBBF24;'>{clean_text}</span>"
+        elif "[Faster-Whisper]" in clean_text:
+            styled = f"<span style='color:#00F5D4;'>{clean_text}</span>"
+        elif clean_text.startswith("[顯存預算]"):
+            styled = f"<span style='color:#C084FC;'>{clean_text}</span>"
+        elif clean_text.startswith("[分層規劃]"):
+            styled = f"<span style='color:#FB923C;'>{clean_text}</span>"
+        elif "▶" in clean_text or "啟動" in clean_text:
             styled = f"<span style='color:#56D6C2; font-weight:bold;'>{clean_text}</span>"
         elif "🎉" in clean_text or "成功" in clean_text or "完成" in clean_text:
             styled = f"<span style='color:#74C69D; font-weight:bold;'>{clean_text}</span>"
@@ -966,34 +1057,69 @@ class MidnightDashboardWindow(QMainWindow):
             save_watch_dir_to_config(f)
             self.append_log(f"📁 監聽目錄變更為: {f}")
 
+    def show_model_help(self):
+        if not hasattr(self, "model_guide"):
+            mode = "A" if self.model_panel.mode.currentData() == "separate" else "B"
+            self.model_guide = HardwareGuideDialog(self.model_panel.selectors["vlm_path"].styleSheet(), mode, self)
+        self.model_guide.show()
+        self.model_guide.raise_()
+
     def show_disk_details(self):
-        dlg = DiskDetailDialog(self)
-        dlg.exec()
+        if not hasattr(self, "disk_dialog"):
+            self.disk_dialog = InfoTextDialog("儲存空間資訊", parent=self)
+        self.disk_dialog.set_text(storage_text(self.storage_disks))
+        self.disk_dialog.show()
+        self.disk_dialog.raise_()
 
     def start_telemetry(self):
         self.telemetry = TelemetryThread()
         self.telemetry.telemetry_signal.connect(self.update_telemetry)
         self.telemetry.start()
 
-    def update_telemetry(self, cpu_p, cpu_t, ram_p, ram_v, g0_p, g0_v, g0_t, g1_p, g1_v, g1_t, disks, resolve_on):
-        self.ring_cpu.set_data(cpu_p)
-        self.thermo_cpu.set_temp(cpu_t)
-        self.tank_ram.set_data(ram_p, ram_v)
-        
-        self.ring_gpu0.set_data(g0_p, g0_v)
-        self.thermo_gpu0.set_temp(g0_t)
-
-        self.ring_gpu1.set_data(g1_p, g1_v)
-        self.thermo_gpu1.set_temp(g1_t)
-
-        for letter, tot, free, pct in disks:
-            if letter == "C":
-                self.disk_c.update_disk(tot, free, pct)
-            elif letter == "D":
-                self.disk_d.update_disk(tot, free, pct)
-            elif letter == "E":
-                self.disk_e.update_disk(tot, free, pct)
-
+    def update_telemetry(self, data):
+        self.ring_cpu.set_data(data["cpu_percent"])
+        self.thermo_cpu.set_temp(data["cpu_temp"])
+        self.thermo_cpu.setToolTip(data.get("cpu_temp_status", "CPU Package: unavailable") + " | 分級 75 / 85 / 94°C")
+        self.tank_ram.set_data(data["ram_percent"], data["ram_text"])
+        cards = data["gpus"]
+        signature = [(c["id"], c["name"], c["kind"]) for c in cards]
+        if signature != getattr(self, "gpu_signature", None):
+            self.gpu_signature = signature
+            while self.gpu_meter_box.count():
+                item = self.gpu_meter_box.takeAt(0)
+                if item.widget():
+                    item.widget().deleteLater()
+            self.gpu_widgets.clear()
+            for index, card in enumerate(cards):
+                container = QWidget()
+                row = QHBoxLayout(container)
+                row.setContentsMargins(0, 0, 0, 0)
+                title = card["name"].replace("NVIDIA GeForce ", "")
+                palette = (("#00F5D4", "#00A6D6"), ("#F60088", "#AA39D3"))
+                first, second = palette[index % len(palette)]
+                ring = RingMeter(title=title, size=112, start_color=first, end_color=second)
+                thermometer = ThermoMeter(width=34, height=112, device=card["name"])
+                row.addWidget(ring)
+                row.addWidget(thermometer)
+                self.gpu_meter_box.addWidget(container, index // 2, index % 2)
+                self.gpu_widgets[card["id"]] = (ring, thermometer)
+        self.gpu_empty.setVisible(not cards)
+        self.gpu_empty.setText("未取得 GPU 遙測；以系統記憶體監控，推論裝置由引擎偵測。")
+        for card in cards:
+            ring, thermometer = self.gpu_widgets[card["id"]]
+            if card["memory_percent"] is None:
+                ring.set_data(0, "用量不可用")
+                ring.percent_available = False
+            else:
+                text = f'{card["used_gb"]:.1f}/{card["total_gb"]:.1f}G'
+                ring.set_data(card["memory_percent"], ("共享 " if card["kind"] == "shared" else "VRAM ") + text)
+                ring.percent_available = True
+            compute = card.get("compute_percent")
+            ring.setToolTip(card["name"] + " | " + card["scope"] + (f" | GPU {compute}%" if compute is not None else ""))
+            thermometer.set_temp(card["temperature"])
+            thermometer.setToolTip(card["name"] + " | 顯示分級 " + " / ".join(map(str, temperature_limits(card["name"]))) + "°C（非硬體極限）")
+        self.update_storage(data)
+        resolve_on = data["resolve_on"]
         if resolve_on:
             self.badge_resolve.setText("RESOLVE: READY")
             self.badge_resolve.setStyleSheet("background-color: #122822; color: #52B788; border: 1px solid #2D6A4F; border-radius: 10px; padding: 4px 12px; font-size: 10px; font-weight: bold;")
@@ -1001,11 +1127,92 @@ class MidnightDashboardWindow(QMainWindow):
             self.badge_resolve.setText("RESOLVE: OFFLINE")
             self.badge_resolve.setStyleSheet("background-color: #2D1424; color: #F472B6; border: 1px solid #701A4B; border-radius: 10px; padding: 4px 12px; font-size: 10px; font-weight: bold;")
 
+    def update_storage(self, data):
+        self.storage_disks = data.get("disk_details", [
+            {"mount": mount, "total_gb": total, "free_gb": free, "percent": percent}
+            for mount, total, free, percent in data["disks"]])
+        by_mount = {disk["mount"].replace(chr(92), "/").rstrip("/").upper(): disk
+                    for disk in self.storage_disks}
+        for tile in self.disk_tiles:
+            disk = by_mount.get(tile.drive_letter)
+            if disk is None:
+                tile.clear_disk()
+            else:
+                tile.lbl_name.setText(disk["mount"])
+                tile.update_disk(disk["total_gb"], disk["free_gb"], disk["percent"])
+                tile.setToolTip(disk["mount"])
+        if hasattr(self, "disk_dialog"):
+            self.disk_dialog.set_text(storage_text(self.storage_disks))
+
+    def update_sampling_hint(self):
+        rate = self.ai_sampling.currentData()
+        self.sampling_hint.setText("AI 取樣頻率" + (" · 高負擔" if rate >= 2 else ""))
+        self.sampling_hint.setStyleSheet("font-size: 10px; color: " + ("#FBBF24;" if rate >= 2 else "#A0ABC0;"))
+
+    def show_sampling_help(self):
+        text = (
+            "只影響 AI 畫面理解；技術分析仍每兩秒一張。\n\n"
+            "每秒 0.25 張：每六秒約 2 張，低負擔，適合慢變化場景。\n"
+            "每秒 0.5 張：每六秒約 3 張，較低負擔。\n"
+            "每秒 1 張：每六秒約 6 張，建議起點。\n"
+            "每秒 2 張：每六秒約 12 張，高負擔，適合動作與操作。\n"
+            "每秒 4 張：每六秒約 24 張，負擔最高。\n\n"
+            "提高頻率會增加影像編碼、推論時間、顯存與上下文用量，"
+            f"不保證理解品質等比例提升。高頻率可能超出目前選擇的 {self.model_panel.context.currentData()}-token 上下文或可用記憶體；"
+            "實際負擔取決於模型、圖片尺寸與硬體，尚未保證所有設備都能處理最高頻率。\n\n"
+            "程式不會自動降頻；失敗會重試，仍失敗則標為待確認。"
+            "尾段依實際長度取樣，至少一張；實際送圖數記錄在日誌與 JSON。"
+            "模型準備與監看期間無法更改頻率。")
+        if not hasattr(self, "sampling_dialog"):
+            self.sampling_dialog = InfoTextDialog("AI 取樣頻率與用量說明", text, self)
+        self.sampling_dialog.set_text(text)
+        self.sampling_dialog.show()
+        self.sampling_dialog.raise_()
+
+    def save_sampling_rate(self, *_):
+        self.user_config["ai_sampling_fps"] = self.ai_sampling.currentData()
+        save_user_config(self.user_config)
+        self.update_sampling_hint()
+
     def toggle_watching(self):
         if not self.worker or not self.worker.isRunning():
-            self.worker = WorkerThread(self.edit_path.text(), self.edit_prompt.toPlainText())
+            self.start_after_model = True
+            self.ai_sampling.setEnabled(False)
+            self.btn_toggle.setEnabled(False)
+            self.btn_toggle.setText("模型載入中…")
+            self.model_panel.load_runtime()
+            return
+        else:
+            self.worker.stop()
+            self.btn_toggle.setEnabled(False)
+            self.btn_toggle.setText("等待目前任務結束…")
+
+    def on_model_ready(self, ok, message):
+        if not self.start_after_model:
+            return
+        self.start_after_model = False
+        self.btn_toggle.setEnabled(True)
+        if not ok:
+            self.ai_sampling.setEnabled(True)
+            self.btn_toggle.setText("⚡ START SENTINEL")
+            return
+        self.start_watching_ready()
+
+    def start_watching_ready(self):
+        if not self.worker or not self.worker.isRunning():
+            self.user_config["context_prompt"] = self.edit_prompt.toPlainText()
+            save_user_config(self.user_config)
+            self.model_panel.set_working(True)
+            self.ai_sampling.setEnabled(False)
+            settings = self.model_panel.values()
+            settings["ai_sampling_fps"] = self.ai_sampling.currentData()
+            self.append_log(f"[AI 取樣] 本批次鎖定每秒 {settings['ai_sampling_fps']:g} 張；只影響 AI 畫面理解。")
+            self.worker = WorkerThread(self.edit_path.text(), self.edit_prompt.toPlainText(),
+                                       self.model_panel.values()["whisper_model"] or None,
+                                       settings)
             self.worker.log_signal.connect(self.append_log)
             self.worker.queue_signal.connect(self.on_queue)
+            self.worker.finished.connect(self.on_worker_finished)
             self.worker.start()
 
             self.btn_toggle.setText("⏹ STOP SENTINEL")
@@ -1013,37 +1220,144 @@ class MidnightDashboardWindow(QMainWindow):
 
             self.badge_guard.setText("GUARD: ACTIVE")
             self.badge_guard.setStyleSheet("background-color: #122822; color: #00F5D4; border: 1px solid #00F5D4; border-radius: 10px; padding: 4px 12px; font-size: 10px; font-weight: bold;")
+
+    def on_worker_finished(self):
+        self.worker = None
+        self.reset_sentinel_controls()
+        self.model_panel.set_working(False)
+        self.model_panel.refresh_runtime_button()
+        if self.pending_model_unload:
+            self.pending_model_unload = False
+            self.model_panel.unload_runtime()
         else:
+            self.append_log("[監看] 已停止；模型保留，由 Local Model Selection 的『卸除模型』管理。")
+        if self.close_after_worker:
+            self.close_after_worker=False
+            self.close()
+
+    def request_model_unload(self):
+        if self.worker and self.worker.isRunning():
+            self.pending_model_unload=True
             self.worker.stop()
-            self.worker = None
+            self.model_panel.load_button.setEnabled(False)
+            self.model_panel.load_button.setText("等待分析結束…")
+            self.append_log("[模型引擎] 已要求卸除；先取消分析，待 worker 結束後釋放模型。")
+        else:
+            self.model_panel.unload_runtime()
 
-            self.btn_toggle.setText("⚡ START SENTINEL")
-            self.btn_toggle.setStyleSheet("background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #FF007F, stop:1 #7928CA); color: #FFF; border: none; border-radius: 10px; padding: 9px 24px; font-weight: bold; font-size: 12px;")
+    def on_models_stopped(self, ok, message):
+        if not ok:
+            self.append_log("❌ 模型尚未完全卸除，請在模型區重試。")
+            return
+        self.reset_sentinel_controls()
 
-            self.badge_guard.setText("GUARD: IDLE")
-            self.badge_guard.setStyleSheet("background-color: #1B1E36; color: #A0ABC0; border: 1px solid #2A2F54; border-radius: 10px; padding: 4px 12px; font-size: 10px; font-weight: bold;")
-            self.append_log("⚡ 哨兵監聽已離線。")
+    def reset_sentinel_controls(self):
+        self.model_panel.set_working(False)
+        self.ai_sampling.setEnabled(True)
+        self.on_queue(0)
+        self.btn_toggle.setEnabled(True)
+        self.btn_toggle.setText("⚡ START SENTINEL")
+        self.btn_toggle.setStyleSheet("background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #FF007F, stop:1 #7928CA); color: #FFF; border: none; border-radius: 10px; padding: 9px 24px; font-weight: bold; font-size: 12px;")
+        self.badge_guard.setText("GUARD: IDLE")
+        self.badge_guard.setStyleSheet("background-color: #1B1E36; color: #A0ABC0; border: 1px solid #2A2F54; border-radius: 10px; padding: 4px 12px; font-size: 10px; font-weight: bold;")
+        self.append_log("⚡ 哨兵監聽已離線。")
 
     def on_queue(self, q_count):
         self.lbl_queue.setText(f"📦 佇列: {q_count} 部")
 
+    def toggle_view_mode(self):
+        """Reuse live hardware widgets without restarting analysis or telemetry."""
+        self.is_compact_mode = not self.is_compact_mode
+        if self.is_compact_mode:
+            self.full_geometry = self.saveGeometry()
+            self.full_rect = self.geometry()
+            self.full_maximized = self.isMaximized()
+        for widget in (*self.title_widgets, self.col_mid_widget,
+                       self.col_right_widget, self.card_disk, self.card_watch):
+            widget.setVisible(not self.is_compact_mode)
+        self.btn_toggle_view.setText("🖥️ 完整工作臺" if self.is_compact_mode else "📌 簡約視窗")
+        if self.is_compact_mode:
+            self.setWindowTitle("AI Director Studio v1.0 · 簡約監控")
+            self.footer_title.setText("AI DIRECTOR STUDIO")
+            self.footer_author.setText("Pan Bo-Han（潘柏翰）")
+            self.setMinimumSize(480, 520)
+            self.showNormal()
+            rows = max(1, (len(self.gpu_widgets) + 1) // 2)
+            self.resize(480, 520 + (rows - 1) * 140)
+        else:
+            self.setWindowTitle("AI Director Studio v1.0")
+            self.footer_title.setText("AI DIRECTOR STUDIO  |  NEURAL INGESTION & AUTO-MARKER")
+            self.footer_author.setText("Developed by Pan Bo-Han (潘柏翰)  |  指導老師：郭俞霈教授")
+            self.setMinimumSize(1060, 820)
+            self.restoreGeometry(self.full_geometry)
+            if self.full_maximized:
+                self.showMaximized()
+            else:
+                self.setGeometry(self.full_rect)
+
     def closeEvent(self, event):
+        if self.worker and self.worker.isRunning():
+            self.close_after_worker=True
+            self.worker.stop()
+            self.append_log("正在取消分析，結束後關閉介面；模型服務保留在背景。")
+            event.ignore()
+            return
+        self.model_panel.wait_for_scan()
+        if self.model_panel.runtime_unloader and self.model_panel.runtime_unloader.isRunning():
+            self.append_log("模型正在卸載，請稍候再關閉。")
+            event.ignore()
+            return
+        if self.model_panel.runtime_loader and self.model_panel.runtime_loader.isRunning():
+            self.append_log("模型載入尚未結束，請完成後再關閉；不會中途破壞載入。")
+            event.ignore();return
+        if self.model_panel.runtime_recovery and self.model_panel.runtime_recovery.isRunning():
+            self.model_panel.runtime_recovery.wait()
+        try:
+            self.model_panel.runtime.release_audio(self.append_log)
+            self.model_panel.runtime.preserve_background()
+        except Exception as exc:
+            self.append_log(f"背景模型紀錄無法保存：{exc}；請先卸除模型再關閉。")
+            event.ignore();return
         if hasattr(self, 'telemetry') and self.telemetry.isRunning():
             self.telemetry.stop()
         if self.worker and self.worker.isRunning():
             self.worker.stop()
-        if NVML_AVAILABLE:
-            try:
-                pynvml.nvmlShutdown()
-            except Exception:
-                pass
         event.accept()
+
+def offer_temperature_elevation(parent=None):
+    """Offer UAC before workers/models start; cancellation keeps the app usable."""
+    if sys.platform != "win32":
+        return False
+    try:
+        if ctypes.windll.shell32.IsUserAnAdmin():
+            return False
+    except Exception:
+        return False
+    choice = QMessageBox.question(parent, "啟用 CPU 溫度感測",
+        "此電腦的內建 CPU 溫度感測需要管理員權限。\n"
+        "是否透過 Windows 權限提示，以管理員身分重新啟動？\n\n"
+        "選擇「否」或取消權限提示仍可使用分析功能；CPU 溫度可能顯示 N/A。",
+        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        QMessageBox.StandardButton.No)
+    if choice != QMessageBox.StandardButton.Yes:
+        return False
+    arguments = sys.argv[1:] if getattr(sys, "frozen", False) else [str(Path(__file__).resolve()), *sys.argv[1:]]
+    result = ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable,
+        subprocess.list2cmdline(arguments), str(Path(__file__).resolve().parent.parent), 1)
+    if result > 32:
+        return True
+    QMessageBox.information(parent, "以一般權限繼續", "未取得管理員權限，將繼續啟動；CPU 溫度可能顯示 N/A。")
+    return False
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    if offer_temperature_elevation():
+        sys.exit(0)
     app_icon = create_app_icon()
     app.setWindowIcon(app_icon)
     app.setStyleSheet(MIDNIGHT_QSS)
     window = MidnightDashboardWindow()
     window.show()
+    window.model_panel.recover_runtime()
     sys.exit(app.exec())

@@ -1,0 +1,101 @@
+# Machine-specific state, credentials and developer environments
+/.local/
+/.venv/
+/venv/
+/env/
+/.conda/
+/.agents/
+/.codex/
+/.vscode/
+/.idea/
+/00_Agent/
+.env
+.env.*
+!.env.example
+!.env.template
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*.json
+client_secret*.json
+secrets*.json
+*.token
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Python caches, test output and build products
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+/build/
+/dist/
+*.egg-info/
+*.log
+*.tmp
+*.bak
+*.lnk
+/python.exe
+/pythonw.exe
+/AI Director Studio.exe
+
+# Model weights and source footage (including accidental files outside pools)
+*.gguf
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+*.onnx
+*.bin
+*.mp4
+*.mov
+*.mkv
+*.avi
+*.mxf
+*.mts
+*.m2ts
+*.webm
+*.wav
+*.mp3
+*.flac
+*.m4a
+*.aac
+*.ogg
+/04_Models/*
+!/04_Models/.gitkeep
+/02_Data/*
+!/02_Data/.gitkeep
+!/02_Data/note.txt
+/01_Input/
+
+# Generated jobs, reports, downloaded engines and release archives
+/05_Output/
+/03_Code/05_Output/
+/03_Code/02_Data/
+/03_Code/01_Input/
+/tools/downloads/
+/tools/llama-*/
+*.zip
+*.7z
+*.tar.gz
+*.tgz
+audio_analysis*.json
+vision_analysis*.json
+semantic_progress.json
+marker_coverage.json
+resolve_submission.json
+
+# Historical machine/build audit manifests remain local, never delete them
+/docs/ORIGINAL_SOURCE_HASHES.json
+/docs/RELEASE_FILES_SHA256.txt
+
+# Deliberately public: relative-path 01_Project/*.json templates, icons,
+# launcher/build source, and third_party/cpu-sensor DLLs + licenses + SHA256.
+# Do not globally ignore *.dll: doing so would break CPU temperature deployment.

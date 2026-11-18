@@ -1,0 +1,86 @@
+{
+  "python": "3.10.2",
+  "packages": {
+    "PyQt6": {
+      "version": "6.11.0",
+      "license_metadata_excerpt": "GPL-3.0-only"
+    },
+    "psutil": {
+      "version": "7.2.2",
+      "license_metadata_excerpt": "BSD-3-Clause"
+    },
+    "numpy": {
+      "version": "2.2.6",
+      "license_metadata_excerpt": "Copyright (c) 2005-2024, NumPy Developers.\n All rights reserved.\n\n Redistribution and use in source and binary forms, with or without\n modification, a"
+    },
+    "opencv-python": {
+      "version": "5.0.0.93",
+      "license_metadata_excerpt": "Apache 2.0"
+    },
+    "torch": {
+      "version": "2.11.0+cu128",
+      "license_metadata_excerpt": "BSD-3-Clause"
+    },
+    "faster-whisper": {
+      "version": "1.2.1",
+      "license_metadata_excerpt": "MIT"
+    },
+    "ctranslate2": {
+      "version": "4.8.2",
+      "license_metadata_excerpt": "MIT"
+    },
+    "huggingface-hub": {
+      "version": "2.2.0",
+      "license_metadata_excerpt": "Apache-2.0"
+    },
+    "filelock": {
+      "version": "3.32.3",
+      "license_metadata_excerpt": "MIT"
+    },
+    "PyAutoGUI": {
+      "version": "0.9.54",
+      "license_metadata_excerpt": "BSD"
+    },
+    "pyperclip": {
+      "version": "1.11.0",
+      "license_metadata_excerpt": "BSD"
+    },
+    "nvidia-ml-py": {
+      "version": "13.615.71",
+      "license_metadata_excerpt": "BSD"
+    },
+    "pythonnet": {
+      "version": "3.1.0",
+      "license_metadata_excerpt": "MIT"
+    },
+    "clr-loader": {
+      "version": "0.3.1",
+      "license_metadata_excerpt": "See upstream metadata"
+    },
+    "pyinstaller": {
+      "version": "6.22.3",
+      "license_metadata_excerpt": "GPLv2-or-later with a special exception which allows to use PyInstaller to build and distribute non-free programs (including commercial ones)"
+    }
+  },
+  "test_command": "python -X utf8 -B -m unittest discover -s 03_Code/tests -v",
+  "exit_code": 0,
+  "tests": 122,
+  "observed_seconds": 0.718,
+  "integration_not_run": [
+    "large model",
+    "full GPU",
+    "Resolve UI/write",
+    "admin CPU temperature",
+    "clean dependency install",
+    "full PyInstaller build"
+  ],
+  "gui_version_observed": "v1.0",
+  "proposed_release_version": "v1.1.0-rc.1 (not assigned)",
+  "remote_main": "9f9f1a741786adb420000167cec1a09641be4a94",
+  "date": "2026-11-18",
+  "timezone": "Asia/Taipei",
+  "packaging_only_changes": [
+    "03_Code/export_source.py",
+    "03_Code/tests/test_release_export.py"
+  ]
+}

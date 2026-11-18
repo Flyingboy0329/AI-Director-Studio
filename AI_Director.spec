@@ -6,7 +6,7 @@ from PyInstaller.utils.hooks import collect_data_files
 
 block_cipher = None
 
-PROJ_ROOT = Path(os.path.abspath(".")).resolve()
+PROJ_ROOT = Path(SPECPATH).resolve()
 code_dir = str(PROJ_ROOT / "03_Code")
 
 hiddenimports = [
@@ -39,12 +39,26 @@ except Exception:
 datas += [
     ('resolve_lua', 'resolve_lua'),
     ('01_Project/app_icon.png', '01_Project'),
+    ('01_Project/app_icon.ico', '01_Project'),
+    ('01_Project/prompts', '01_Project/prompts'),
 ]
+
+# Optional local sensor libraries; never install/elevate drivers during build.
+sensor_dir = PROJ_ROOT / 'third_party' / 'cpu-sensor'
+if sys.platform == 'win32' and sensor_dir.is_dir():
+    datas.append((str(sensor_dir), 'hardware_monitor'))
+    from PyInstaller.utils.hooks import collect_all
+    for dependency in ('pythonnet', 'clr_loader'):
+        dep_data, dep_binaries, dep_hidden = collect_all(dependency)
+        datas += dep_data
+        hiddenimports += dep_hidden
+        # Included in Analysis below.
+        globals().setdefault('sensor_binaries', []).extend(dep_binaries)
 
 a = Analysis(
     ['03_Code/app_gui.py'],
     pathex=[code_dir, str(PROJ_ROOT)],
-    binaries=[],
+    binaries=globals().get("sensor_binaries", []),
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],

@@ -1,0 +1,5 @@
+* text=auto
+*.dll -text
+*.exe -text
+*.ico -text
+*.png -text

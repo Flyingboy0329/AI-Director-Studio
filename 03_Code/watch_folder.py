@@ -1,9 +1,11 @@
 ﻿import time
 import sys
+from cancellation import check_cancelled
 from pathlib import Path
 
 CODE_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = CODE_DIR.parent
+from path_utils import get_project_root
+PROJECT_ROOT = get_project_root()
 DATA_DIR = PROJECT_ROOT / "02_Data"
 
 sys.path.insert(0, str(CODE_DIR))
@@ -11,11 +13,12 @@ from main import run_main_pipeline
 
 SUPPORTED_EXT = {".mp4", ".mov", ".mkv", ".avi"}
 
-def wait_for_file_ready(file_path, check_interval=1.0, retries=3):
+def wait_for_file_ready(file_path, check_interval=1.0, retries=3, cancel_event=None):
     """確認檔案複製完畢（大小穩定未被鎖定）"""
     last_size = -1
     stable_count = 0
     while stable_count < retries:
+        check_cancelled(cancel_event)
         try:
             current_size = file_path.stat().st_size
             if current_size == last_size and current_size > 0:

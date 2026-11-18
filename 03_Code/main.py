@@ -1,149 +1,117 @@
-﻿import sys
-import os
+﻿import os
+import sys
 import time
 import json
-import argparse
-from datetime import datetime
+import uuid
+from concurrent.futures import ThreadPoolExecutor, wait, FIRST_EXCEPTION
 from pathlib import Path
 
 CODE_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = CODE_DIR.parent
+if str(CODE_DIR) not in sys.path:
+    sys.path.insert(0, str(CODE_DIR))
 
-sys.path.insert(0, str(CODE_DIR))
-sys.path.append(str(CODE_DIR / "ai"))
-sys.path.append(str(CODE_DIR / "pipeline"))
-sys.path.append(str(CODE_DIR / "bridge"))
+from path_utils import get_project_root, load_local_settings
+PROJ_ROOT = get_project_root()
 
-from video_extract import split_media
-from audio_analyzer import analyze_audio
-from vision_analyzer import analyze_video
-import director_decision
-import auto_injector
+from ai.video_extract import split_media
+from ai.audio_analyzer import analyze_audio, get_whisper_runtime
+from ai.vision_analyzer import analyze_vision
+from pipeline.director_decision import build_markers
+from bridge.auto_injector import trigger_resolve_injection
+from ai.semantic_analyzer import analyze_semantics, prepare_clients, prepare_visual_observations
+from cancellation import check_cancelled, LinkedCancellation
+from pipeline.submission import submit_markers
+from job_cleanup import mark_job_owned, cleanup_job
 
-def log_task_result(task_log, logs_dir):
-    logs_dir.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_file = logs_dir / f"task_{timestamp}.json"
-    with open(log_file, "w", encoding="utf-8") as f:
-        json.dump(task_log, f, ensure_ascii=False, indent=2)
-    print(f"\n[日誌] 任務執行紀錄已留存: {log_file.name}")
-
-def run_main_pipeline(input_video_path, context_prompt=None):
-    start_total_time = time.time()
-    input_file = Path(input_video_path).resolve()
-    clip_base_name = input_file.stem
-    
-    data_dir = (PROJECT_ROOT / "02_Data").resolve()
-    output_dir = (PROJECT_ROOT / "05_Output").resolve()
-    logs_dir = output_dir / "logs"
-
-    task_log = {
-        "task_id": datetime.now().strftime(f"{clip_base_name}_%Y%m%d_%H%M%S"),
-        "clip_name": clip_base_name,
-        "input_video": str(input_file),
-        "status": "PROCESSING",
-        "stages": {},
-        "error_message": None,
-        "total_duration_sec": 0
-    }
+def run_main_pipeline(input_video_path, context_prompt=None, whisper_model=None, model_settings=None, cancel_event=None):
+    check_cancelled(cancel_event)
+    raw_video = Path(input_video_path).resolve()
+    if not raw_video.exists():
+        print(f"[Pipeline] ❌ 找不到素材檔案: {raw_video}")
+        return False
 
     print("=" * 60)
-    print("🎬 【AI Director 智慧導演管線】任務啟動")
-    print(f"📁 輸入素材名稱: {clip_base_name}")
-    print(f"📁 檔案絕對路徑: {input_file}")
-    print(f"🕒 啟動時間: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"🎬 【AI Director 智慧導演管線】任務啟動")
+    print(f"📁 輸入素材母帶 (含完整影音): {raw_video.name}")
+    print(f"🕒 啟動時間: {time.strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
 
-    if not input_file.exists():
-        err = f"找不到輸入影片檔案: {input_file}"
-        print(f"❌ [錯誤] {err}")
-        task_log["status"] = "FAILED_INPUT_NOT_FOUND"
-        task_log["error_message"] = err
-        log_task_result(task_log, logs_dir)
+    # 1. 拆分特徵提取用暫存檔 (精確傳入 input_path 與 output_dir 兩個參數)
+    if model_settings is None:
+        model_settings = load_local_settings("model_settings.json")
+    # Own intermediates per job until dispatch; successful jobs are cleaned below.
+    data_dir = PROJ_ROOT / "05_Output" / "jobs" / uuid.uuid4().hex
+    data_dir.mkdir(parents=True, exist_ok=True)
+    mark_job_owned(data_dir, raw_video)
+    print(f"[Pipeline] Whisper 計畫：{whisper_model or '依 RAM 自動選型'}；CPU／RAM、INT8，與視覺工作並行。")
+    v_temp, a_temp = split_media(str(raw_video), str(data_dir))
+    check_cancelled(cancel_event)
+
+    if not v_temp or not a_temp:
+        print("[Pipeline] ❌ 影音分離失敗，終止任務。")
         return False
 
-    valid_extensions = [".mp4", ".mov", ".mkv", ".avi"]
-    if input_file.suffix.lower() not in valid_extensions:
-        err = f"不支援的格式: {input_file.suffix}"
-        print(f"❌ [錯誤] {err}")
-        task_log["status"] = "FAILED_INVALID_FORMAT"
-        task_log["error_message"] = err
-        log_task_result(task_log, logs_dir)
-        return False
+    # 2. 影音特徵抽取推論
+    cancel_event = LinkedCancellation(cancel_event)
+    a_json = data_dir / "audio_analysis.json"
+    v_json = data_dir / "vision_analysis.json"
+    separate = (model_settings.get("model_mode", "separate") == "separate" and
+                bool(model_settings.get("llm_path") and model_settings.get("vlm_path") and model_settings.get("mmproj_path")))
+    def visual_work():
+        result = analyze_vision(v_temp, str(v_json), cancel_event=cancel_event)
+        if not result or not result.get("frames"):
+            raise ValueError("畫面分析未產生有效結果，停止處理。")
+        observations = prepare_visual_observations(raw_video, result, model_settings,
+                            cancel_event=cancel_event) if separate else None
+        return result, observations
+    print("[並行] A 方案：CPU 語音＋獨立 VLM 畫面理解。" if separate else
+          "[並行] B／技術方案：CPU 語音＋影格技術分析；主模型等待兩者完成。")
+    with ThreadPoolExecutor(max_workers=2, thread_name_prefix="director-media") as executor:
+        audio_future = executor.submit(analyze_audio, a_temp, str(a_json), model_name=whisper_model,
+                          context_prompt=model_settings.get("whisper_prompt", ""),
+                          cancel_event=cancel_event, runtime=get_whisper_runtime())
+        visual_future = executor.submit(visual_work)
+        done, _ = wait((audio_future, visual_future), return_when=FIRST_EXCEPTION)
+        for future in done:
+            if future.exception() is not None:
+                cancel_event.set()
+                future.result()
+        # A failure propagates, never masquerades as an empty transcript.
+        audio = audio_future.result()
+        vision, visual_cache = visual_future.result()
+    check_cancelled(cancel_event)
+    print(f"[同步完成] 語音轉錄完成（{len(audio)} 段），視覺工作完成；現在才允許影音整合。")
+    if model_settings.get("llm_path"):
+        print("[Pipeline] 已選擇 LLM：啟動畫面／語音區間理解，不以技術評分冒充語義分析。")
+        vision = analyze_semantics(raw_video, vision, audio, model_settings, context_prompt, cancel_event=cancel_event,
+                                   progress_path=data_dir / "semantic_progress.json", visual_cache=visual_cache)
+        v_json.write_text(json.dumps(vision, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(f"[完成摘要] {len(vision['semantic_windows'])} 個區間已處理，其中 {vision['degraded_windows']} 個需確認；待確認區間會明確標色。")
 
-    try:
-        # Step 1: 媒體拆分
-        t0 = time.time()
-        print("\n[1/4] 🔨 FFmpeg 影音分離中...")
-        v_out, a_out = split_media(str(input_file), str(data_dir))
-        if not v_out or not a_out or not Path(v_out).exists():
-            raise RuntimeError("FFmpeg 分離產物遺失或執行失敗")
-        task_log["stages"]["step1_ffmpeg"] = {"status": "SUCCESS", "duration_sec": round(time.time() - t0, 2)}
-        print(f"  └─ 完成！耗時: {time.time() - t0:.2f} 秒")
+    # 3. 導演決策層 (傳入 raw_video 保留母帶音訊)
+    check_cancelled(cancel_event)
+    task_lua = build_markers(
+        video_path=str(raw_video),
+        video_clip_name=raw_video.name,
+        vision_analysis_path=str(v_json),
+        audio_analysis_path=str(a_json),
+        output_lua_path=str(data_dir / "marker_task.lua")
+    )
 
-        # Step 2: 雙軌特徵抽取
-        t0 = time.time()
-        print("\n[2/4] 🧠 影音特徵抽取推論中...")
-        audio_json_path = (data_dir / "audio_analysis.json").resolve()
-        vision_json_path = (data_dir / "vision_analysis.json").resolve()
-        
-        analyze_audio(a_out, str(audio_json_path), context_prompt=context_prompt)
-        analyze_video(v_out, str(vision_json_path), sample_interval_sec=2.0)
-        task_log["stages"]["step2_ai_analysis"] = {"status": "SUCCESS", "duration_sec": round(time.time() - t0, 2)}
-        print(f"  └─ 完成！推論耗時: {time.time() - t0:.2f} 秒")
-
-        # Step 3: 動態透傳素材名稱與實體路徑給導演決策層
-        t0 = time.time()
-        print("\n[3/4] 👑 導演決策層：動態品級映射與連續色譜建構...")
-        director_decision.build_markers(
-            video_clip_name=clip_base_name,
-            video_path=Path(v_out),
-            raw_video_file=input_file,
-            vision_json=vision_json_path,
-            audio_json=audio_json_path
-        )
-        task_log["stages"]["step3_director_decision"] = {"status": "SUCCESS", "duration_sec": round(time.time() - t0, 2)}
-        print(f"  └─ 完成！決策耗時: {time.time() - t0:.2f} 秒")
-
-        # Step 4: DaVinci Resolve 自動注入
-        t0 = time.time()
-        print("\n[4/4] 🚀 跨進程喚起 DaVinci Resolve 進行標記注入...")
-        inject_success = auto_injector.run_auto_inject()
-        
-        if not inject_success:
-            raise RuntimeError("無法連線至 DaVinci Resolve，請確認軟體是否啟動。")
-
-        task_log["stages"]["step4_resolve_injection"] = {"status": "SUCCESS", "duration_sec": round(time.time() - t0, 2)}
-
-        total_time = time.time() - start_total_time
-        task_log["status"] = "SUCCESS"
-        task_log["total_duration_sec"] = round(total_time, 2)
-
-        print("\n" + "=" * 60)
-        print("🎉 【AI Director】全管線處理完畢，無感閉環成功！")
-        print(f"⏱️ 總運算耗時: {total_time:.2f} 秒")
-        print("📊 標記注入: ✅ 已完成動態精確刷新")
-        print("=" * 60)
-
-        log_task_result(task_log, logs_dir)
-        return True
-
-    except Exception as e:
-        total_time = time.time() - start_total_time
-        task_log["status"] = "FAILED"
-        task_log["error_message"] = str(e)
-        task_log["total_duration_sec"] = round(total_time, 2)
-        print(f"\n❌ Pipeline 執行異常: {e}")
-        log_task_result(task_log, logs_dir)
-        return False
+    # 4. 喚起 Resolve 自動置中注入
+    check_cancelled(cancel_event)
+    submitted = submit_markers(task_lua, lambda task: trigger_resolve_injection(task, fresh_receipt=True), cancel_event)
+    if submitted:
+        # The default bridge embeds task data into its command before delivery.
+        # No model/Resolve consumer needs files in this job after dispatch.
+        try:
+            cleanup_job(data_dir, raw_video, PROJ_ROOT)
+        except Exception as exc:
+            print(f"[暫存清理] 清理未完成：{exc}；保留暫存並繼續下一序列，原掃描檔案不會被刪除。")
+    else:
+        print(f"[暫存清理] 此序列未確認送出，保留 job「{data_dir.name}」，不刪除暫存。")
+    return submitted
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="AI Director 一鍵式自動化標記管線")
-    parser.add_argument(
-        "video",
-        nargs="?",
-        default=str((PROJECT_ROOT / "02_Data" / "japan_walk.mp4").resolve()),
-        help="輸入影片檔案路徑"
-    )
-    args = parser.parse_args()
-    run_main_pipeline(args.video)
+    if len(sys.argv) > 1:
+        run_main_pipeline(sys.argv[1])

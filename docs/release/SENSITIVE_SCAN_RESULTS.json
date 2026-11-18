@@ -1,0 +1,517 @@
+{
+  "local": [],
+  "remote_current": [
+    {
+      "path": "00_Agent/AGENT_RULES.md",
+      "kind": "personal_path",
+      "line": 10
+    },
+    {
+      "path": "00_Agent/PROJECT_OVERVIEW.md",
+      "kind": "personal_path",
+      "line": 6
+    },
+    {
+      "path": "03_Code/__pycache__/audio_transcribe.cpython-310.pyc",
+      "kind": "personal_path",
+      "line": 32
+    },
+    {
+      "path": "03_Code/__pycache__/director.cpython-310.pyc",
+      "kind": "personal_path",
+      "line": 7
+    },
+    {
+      "path": "03_Code/__pycache__/export_davinci_markers.cpython-310.pyc",
+      "kind": "personal_path",
+      "line": 12
+    },
+    {
+      "path": "03_Code/__pycache__/integrate_timeline.cpython-310.pyc",
+      "kind": "personal_path",
+      "line": 23
+    },
+    {
+      "path": "03_Code/__pycache__/main.cpython-310.pyc",
+      "kind": "personal_path",
+      "line": 7
+    },
+    {
+      "path": "03_Code/__pycache__/main.cpython-311.pyc",
+      "kind": "personal_path",
+      "line": 7
+    },
+    {
+      "path": "03_Code/__pycache__/video_extract.cpython-310.pyc",
+      "kind": "personal_path",
+      "line": 18
+    },
+    {
+      "path": "03_Code/__pycache__/vision_analyze.cpython-310.pyc",
+      "kind": "personal_path",
+      "line": 32
+    },
+    {
+      "path": "03_Code/__pycache__/watch_folder.cpython-310.pyc",
+      "kind": "personal_path",
+      "line": 5
+    },
+    {
+      "path": "03_Code/ai/__pycache__/audio_analyzer.cpython-310.pyc",
+      "kind": "personal_path",
+      "line": 7
+    },
+    {
+      "path": "03_Code/ai/__pycache__/audio_analyzer.cpython-310.pyc",
+      "kind": "personal_path",
+      "line": 25
+    },
+    {
+      "path": "03_Code/ai/__pycache__/audio_analyzer.cpython-310.pyc",
+      "kind": "personal_path",
+      "line": 25
+    },
+    {
+      "path": "03_Code/ai/__pycache__/audio_analyzer.cpython-311.pyc",
+      "kind": "personal_path",
+      "line": 9
+    },
+    {
+      "path": "03_Code/ai/__pycache__/audio_analyzer.cpython-311.pyc",
+      "kind": "personal_path",
+      "line": 53
+    },
+    {
+      "path": "03_Code/ai/__pycache__/audio_analyzer.cpython-311.pyc",
+      "kind": "personal_path",
+      "line": 53
+    },
+    {
+      "path": "03_Code/ai/__pycache__/video_extract.cpython-310.pyc",
+      "kind": "personal_path",
+      "line": 15
+    },
+    {
+      "path": "03_Code/ai/__pycache__/video_extract.cpython-310.pyc",
+      "kind": "personal_path",
+      "line": 16
+    },
+    {
+      "path": "03_Code/ai/__pycache__/video_extract.cpython-310.pyc",
+      "kind": "personal_path",
+      "line": 16
+    },
+    {
+      "path": "03_Code/ai/__pycache__/video_extract.cpython-311.pyc",
+      "kind": "personal_path",
+      "line": 15
+    },
+    {
+      "path": "03_Code/ai/__pycache__/video_extract.cpython-311.pyc",
+      "kind": "personal_path",
+      "line": 24
+    },
+    {
+      "path": "03_Code/ai/__pycache__/video_extract.cpython-311.pyc",
+      "kind": "personal_path",
+      "line": 24
+    },
+    {
+      "path": "03_Code/ai/__pycache__/vision_analyzer.cpython-310.pyc",
+      "kind": "personal_path",
+      "line": 9
+    },
+    {
+      "path": "03_Code/ai/__pycache__/vision_analyzer.cpython-310.pyc",
+      "kind": "personal_path",
+      "line": 31
+    },
+    {
+      "path": "03_Code/ai/__pycache__/vision_analyzer.cpython-310.pyc",
+      "kind": "personal_path",
+      "line": 31
+    },
+    {
+      "path": "03_Code/ai/__pycache__/vision_analyzer.cpython-311.pyc",
+      "kind": "personal_path",
+      "line": 7
+    },
+    {
+      "path": "03_Code/ai/__pycache__/vision_analyzer.cpython-311.pyc",
+      "kind": "personal_path",
+      "line": 61
+    },
+    {
+      "path": "03_Code/ai/__pycache__/vision_analyzer.cpython-311.pyc",
+      "kind": "personal_path",
+      "line": 61
+    },
+    {
+      "path": "03_Code/ai/audio_analyzer.py",
+      "kind": "personal_path",
+      "line": 90
+    },
+    {
+      "path": "03_Code/ai/audio_analyzer.py",
+      "kind": "personal_path",
+      "line": 91
+    },
+    {
+      "path": "03_Code/ai/video_extract.py",
+      "kind": "personal_path",
+      "line": 44
+    },
+    {
+      "path": "03_Code/ai/video_extract.py",
+      "kind": "personal_path",
+      "line": 45
+    },
+    {
+      "path": "03_Code/ai/vision_analyzer.py",
+      "kind": "personal_path",
+      "line": 98
+    },
+    {
+      "path": "03_Code/ai/vision_analyzer.py",
+      "kind": "personal_path",
+      "line": 99
+    },
+    {
+      "path": "03_Code/bridge/__pycache__/auto_injector.cpython-310.pyc",
+      "kind": "personal_path",
+      "line": 4
+    },
+    {
+      "path": "03_Code/bridge/__pycache__/auto_injector.cpython-310.pyc",
+      "kind": "personal_path",
+      "line": 4
+    },
+    {
+      "path": "03_Code/bridge/__pycache__/auto_injector.cpython-311.pyc",
+      "kind": "personal_path",
+      "line": 4
+    },
+    {
+      "path": "03_Code/bridge/__pycache__/auto_injector.cpython-311.pyc",
+      "kind": "personal_path",
+      "line": 6
+    },
+    {
+      "path": "03_Code/pipeline/__pycache__/director_decision.cpython-310.pyc",
+      "kind": "personal_path",
+      "line": 6
+    },
+    {
+      "path": "03_Code/resolve_lua/davinci_marker_injector.lua",
+      "kind": "personal_path",
+      "line": 13
+    },
+    {
+      "path": "AI Director Studio.lnk",
+      "kind": "personal_path",
+      "line": 2
+    },
+    {
+      "path": "legacy_archive/dryrun_test.py",
+      "kind": "personal_path",
+      "line": 58
+    },
+    {
+      "path": "legacy_archive/dryrun_test.py",
+      "kind": "personal_path",
+      "line": 65
+    },
+    {
+      "path": "resolve_lua/davinci_marker_injector.lua",
+      "kind": "personal_path",
+      "line": 13
+    }
+  ],
+  "remote_history": [
+    {
+      "path": "00_Agent/AGENT_RULES.md",
+      "kind": "personal_path",
+      "line": 10,
+      "blob": "844369c2a0323bd44764483a064b862b596cbac2"
+    },
+    {
+      "path": "00_Agent/PROJECT_OVERVIEW.md",
+      "kind": "personal_path",
+      "line": 6,
+      "blob": "c21699ec6153eac656c30a43e87f0fc150fbb03b"
+    },
+    {
+      "path": "03_Code/__pycache__/audio_transcribe.cpython-310.pyc",
+      "kind": "personal_path",
+      "line": 32,
+      "blob": "a2013ac745fb804cf196b33b1ef0152b25671fc0"
+    },
+    {
+      "path": "03_Code/__pycache__/director.cpython-310.pyc",
+      "kind": "personal_path",
+      "line": 7,
+      "blob": "ac69964af977c14930d2ee5f6a0d3305f5752d3a"
+    },
+    {
+      "path": "03_Code/__pycache__/export_davinci_markers.cpython-310.pyc",
+      "kind": "personal_path",
+      "line": 12,
+      "blob": "3b5b306a741ac15adf999de1d1064d64c7cc652a"
+    },
+    {
+      "path": "03_Code/__pycache__/integrate_timeline.cpython-310.pyc",
+      "kind": "personal_path",
+      "line": 23,
+      "blob": "ea67a408be663040f4e0219abda0ecca149ec50a"
+    },
+    {
+      "path": "03_Code/__pycache__/main.cpython-310.pyc",
+      "kind": "personal_path",
+      "line": 7,
+      "blob": "b77a99a663f5161f3a1d25cccc5f6fff7ee6d879"
+    },
+    {
+      "path": "03_Code/__pycache__/main.cpython-311.pyc",
+      "kind": "personal_path",
+      "line": 7,
+      "blob": "ab73cae3cfd6bcd5abcef45d930c3394c331e7f9"
+    },
+    {
+      "path": "03_Code/__pycache__/video_extract.cpython-310.pyc",
+      "kind": "personal_path",
+      "line": 18,
+      "blob": "d6ec29fd490e6cd0226eeea635532070cd881b9a"
+    },
+    {
+      "path": "03_Code/__pycache__/vision_analyze.cpython-310.pyc",
+      "kind": "personal_path",
+      "line": 32,
+      "blob": "5b93a85cf031c3a3c25d17ccf9fb666426e19dcf"
+    },
+    {
+      "path": "03_Code/__pycache__/watch_folder.cpython-310.pyc",
+      "kind": "personal_path",
+      "line": 5,
+      "blob": "bebc44b65f02b47bedf711116f38da5b77e6f977"
+    },
+    {
+      "path": "03_Code/ai/__pycache__/audio_analyzer.cpython-310.pyc",
+      "kind": "personal_path",
+      "line": 7,
+      "blob": "ee09766b465d25d24dc6c6bf76696ba753543d0a"
+    },
+    {
+      "path": "03_Code/ai/__pycache__/audio_analyzer.cpython-310.pyc",
+      "kind": "personal_path",
+      "line": 25,
+      "blob": "ee09766b465d25d24dc6c6bf76696ba753543d0a"
+    },
+    {
+      "path": "03_Code/ai/__pycache__/audio_analyzer.cpython-310.pyc",
+      "kind": "personal_path",
+      "line": 25,
+      "blob": "ee09766b465d25d24dc6c6bf76696ba753543d0a"
+    },
+    {
+      "path": "03_Code/ai/__pycache__/audio_analyzer.cpython-311.pyc",
+      "kind": "personal_path",
+      "line": 9,
+      "blob": "d77fc0eb63d9cc0e583417f3f73d346f958d62b9"
+    },
+    {
+      "path": "03_Code/ai/__pycache__/audio_analyzer.cpython-311.pyc",
+      "kind": "personal_path",
+      "line": 53,
+      "blob": "d77fc0eb63d9cc0e583417f3f73d346f958d62b9"
+    },
+    {
+      "path": "03_Code/ai/__pycache__/audio_analyzer.cpython-311.pyc",
+      "kind": "personal_path",
+      "line": 53,
+      "blob": "d77fc0eb63d9cc0e583417f3f73d346f958d62b9"
+    },
+    {
+      "path": "03_Code/ai/__pycache__/video_extract.cpython-310.pyc",
+      "kind": "personal_path",
+      "line": 15,
+      "blob": "a6eb95198688ed534801d0bfec8cbbf0179b89ee"
+    },
+    {
+      "path": "03_Code/ai/__pycache__/video_extract.cpython-310.pyc",
+      "kind": "personal_path",
+      "line": 16,
+      "blob": "a6eb95198688ed534801d0bfec8cbbf0179b89ee"
+    },
+    {
+      "path": "03_Code/ai/__pycache__/video_extract.cpython-310.pyc",
+      "kind": "personal_path",
+      "line": 16,
+      "blob": "a6eb95198688ed534801d0bfec8cbbf0179b89ee"
+    },
+    {
+      "path": "03_Code/ai/__pycache__/video_extract.cpython-311.pyc",
+      "kind": "personal_path",
+      "line": 15,
+      "blob": "d81ab5e37494e1785ff40a5c9517461be1a02d16"
+    },
+    {
+      "path": "03_Code/ai/__pycache__/video_extract.cpython-311.pyc",
+      "kind": "personal_path",
+      "line": 24,
+      "blob": "d81ab5e37494e1785ff40a5c9517461be1a02d16"
+    },
+    {
+      "path": "03_Code/ai/__pycache__/video_extract.cpython-311.pyc",
+      "kind": "personal_path",
+      "line": 24,
+      "blob": "d81ab5e37494e1785ff40a5c9517461be1a02d16"
+    },
+    {
+      "path": "03_Code/ai/__pycache__/vision_analyzer.cpython-310.pyc",
+      "kind": "personal_path",
+      "line": 9,
+      "blob": "4b116faa6bb18a84b3de7154f7bc01d0e24b6040"
+    },
+    {
+      "path": "03_Code/ai/__pycache__/vision_analyzer.cpython-310.pyc",
+      "kind": "personal_path",
+      "line": 31,
+      "blob": "4b116faa6bb18a84b3de7154f7bc01d0e24b6040"
+    },
+    {
+      "path": "03_Code/ai/__pycache__/vision_analyzer.cpython-310.pyc",
+      "kind": "personal_path",
+      "line": 31,
+      "blob": "4b116faa6bb18a84b3de7154f7bc01d0e24b6040"
+    },
+    {
+      "path": "03_Code/ai/__pycache__/vision_analyzer.cpython-311.pyc",
+      "kind": "personal_path",
+      "line": 7,
+      "blob": "d9969e0d47872b4299e40f3540181d00f42a91b4"
+    },
+    {
+      "path": "03_Code/ai/__pycache__/vision_analyzer.cpython-311.pyc",
+      "kind": "personal_path",
+      "line": 61,
+      "blob": "d9969e0d47872b4299e40f3540181d00f42a91b4"
+    },
+    {
+      "path": "03_Code/ai/__pycache__/vision_analyzer.cpython-311.pyc",
+      "kind": "personal_path",
+      "line": 61,
+      "blob": "d9969e0d47872b4299e40f3540181d00f42a91b4"
+    },
+    {
+      "path": "03_Code/ai/audio_analyzer.py",
+      "kind": "personal_path",
+      "line": 90,
+      "blob": "8bac74cf7c7759cc9af148bbf5790e8011c3969f"
+    },
+    {
+      "path": "03_Code/ai/audio_analyzer.py",
+      "kind": "personal_path",
+      "line": 91,
+      "blob": "8bac74cf7c7759cc9af148bbf5790e8011c3969f"
+    },
+    {
+      "path": "03_Code/ai/video_extract.py",
+      "kind": "personal_path",
+      "line": 44,
+      "blob": "521fbe5d716b9e0f789bee98cf0f5c2016e1b78a"
+    },
+    {
+      "path": "03_Code/ai/video_extract.py",
+      "kind": "personal_path",
+      "line": 45,
+      "blob": "521fbe5d716b9e0f789bee98cf0f5c2016e1b78a"
+    },
+    {
+      "path": "03_Code/ai/vision_analyzer.py",
+      "kind": "personal_path",
+      "line": 98,
+      "blob": "da2ccc166f8ad1c3b558ef0111c4df926a8df479"
+    },
+    {
+      "path": "03_Code/ai/vision_analyzer.py",
+      "kind": "personal_path",
+      "line": 99,
+      "blob": "da2ccc166f8ad1c3b558ef0111c4df926a8df479"
+    },
+    {
+      "path": "03_Code/bridge/__pycache__/auto_injector.cpython-310.pyc",
+      "kind": "personal_path",
+      "line": 4,
+      "blob": "3005289303dcb29562c49e62d203923b2ad9003a"
+    },
+    {
+      "path": "03_Code/bridge/__pycache__/auto_injector.cpython-310.pyc",
+      "kind": "personal_path",
+      "line": 4,
+      "blob": "3005289303dcb29562c49e62d203923b2ad9003a"
+    },
+    {
+      "path": "03_Code/bridge/__pycache__/auto_injector.cpython-311.pyc",
+      "kind": "personal_path",
+      "line": 4,
+      "blob": "0ac014e7abb166acc8c264699918b015eed15ac6"
+    },
+    {
+      "path": "03_Code/bridge/__pycache__/auto_injector.cpython-311.pyc",
+      "kind": "personal_path",
+      "line": 6,
+      "blob": "0ac014e7abb166acc8c264699918b015eed15ac6"
+    },
+    {
+      "path": "03_Code/pipeline/__pycache__/director_decision.cpython-310.pyc",
+      "kind": "personal_path",
+      "line": 6,
+      "blob": "a90bb94ab96f40508360b06253c17c0b466c2821"
+    },
+    {
+      "path": "03_Code/resolve_lua/davinci_marker_injector.lua",
+      "kind": "personal_path",
+      "line": 13,
+      "blob": "3f29a95f399ac0906fc51eea84eb2e8d27334d95"
+    },
+    {
+      "path": "AI Director Studio.lnk",
+      "kind": "personal_path",
+      "line": 2,
+      "blob": "b75e54c3e6447f69519862549a3810ff32fcbb40"
+    },
+    {
+      "path": "legacy_archive/dryrun_test.py",
+      "kind": "personal_path",
+      "line": 58,
+      "blob": "444bf6d3ad9e39dcdffd3186a16fb449c49906d9"
+    },
+    {
+      "path": "legacy_archive/dryrun_test.py",
+      "kind": "personal_path",
+      "line": 65,
+      "blob": "444bf6d3ad9e39dcdffd3186a16fb449c49906d9"
+    },
+    {
+      "path": "resolve_lua/davinci_marker_injector.lua",
+      "kind": "personal_path",
+      "line": 13,
+      "blob": "fa26f2dc928e70f6aadf2f1c060dcd7de5589dde"
+    },
+    {
+      "path": "01_Project/user_config.json",
+      "kind": "personal_path",
+      "line": 2,
+      "blob": "a157ac2a1630b6f090895290aa638f73abd9f621"
+    },
+    {
+      "path": "03_Code/bridge/auto_injector.py",
+      "kind": "personal_path",
+      "line": 11,
+      "blob": "c3c9609e445443d55e286ad0f16379dbd1794ec8"
+    }
+  ],
+  "historical_blobs_scanned": 74,
+  "zip": [],
+  "zip_sha256": "0fbf2dded1f21e2a438344ec54a155f4eae0837f88faa83aa1f10fd9a8a73209"
+}
